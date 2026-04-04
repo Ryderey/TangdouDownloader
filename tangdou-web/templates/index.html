@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <h1>🎵 糖豆MP3提取器</h1>
+    <p>下载糖豆广场舞视频，自动去广告转MP3</p>
+</div>
+
+<div class="card">
+    <div class="info-box">
+        <strong>💡 使用说明：</strong><br>
+        1. 复制糖豆视频链接粘贴到下方<br>
+        2. 点击"开始提取"<br>
+        3. 等待处理完成后下载MP3
+    </div>
+    
+    <form id="extractForm">
+        <div class="form-group">
+            <label for="url">📎 视频链接</label>
+            <input type="url" id="url" placeholder="https://www.tangdou.com/..." required>
+        </div>
+        
+        <div class="advanced-toggle">
+            <a href="#" id="toggleAdvanced">⚙️ 高级选项</a>
+        </div>
+        
+        <div class="advanced-options" id="advancedOptions">
+            <div class="form-group">
+                <label for="skip_time">⏱️ 跳过片头时间（默认5秒）</label>
+                <input type="text" id="skip_time" placeholder="5" value="5">
+                <p class="hint">格式：秒 或 分:秒，如 5 或 0:05</p>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn" id="submitBtn">
+            <span>🚀 开始提取 MP3</span>
+        </button>
+    </form>
+    
+    <!-- 进度显示 -->
+    <div class="progress-section" id="progressSection" style="display: none;">
+        <div class="progress-header">
+            <span class="progress-title">处理中...</span>
+            <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        <p class="status-text" id="statusText">准备中...</p>
+    </div>
+    
+    <!-- 结果展示 -->
+    <div class="result-section" id="resultSection" style="display: none;">
+        <div class="result-title success" id="resultTitle">
+            ✅ 提取成功
+        </div>
+        <div class="song-info">
+            <div class="song-name" id="songName">--</div>
+            <div class="song-detail" id="songDetail">MP3 格式 · 已去除片头广告</div>
+        </div>
+        <a href="#" class="download-btn" id="downloadBtn" download>
+            📥 下载 MP3 文件
+        </a>
+    </div>
+    
+    <!-- 错误提示 -->
+    <div id="errorSection" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let checkInterval = null;
+
+// 切换高级选项
+document.getElementById('toggleAdvanced').addEventListener('click', (e) => {
+    e.preventDefault();
+    const options = document.getElementById('advancedOptions');
+    options.classList.toggle('show');
+});
+
+// 表单提交
+document.getElementById('extractForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // 重置状态
+    clearInterval(checkInterval);
+    document.getElementById('errorSection').style.display = 'none';
+    document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('progressSection').style.display = 'block';
+    
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<div class="spinner"></div> <span>处理中...</span>';
+    
+    const data = {
+        url: document.getElementById('url').value.trim(),
+        skip_time: document.getElementById('skip_time').value
+    };
+    
+    try {
+        // 提交任务
+        const response = await fetch('/api/submit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // 轮询任务状态
+        const taskId = result.task_id;
+        checkInterval = setInterval(() => checkStatus(taskId), 800);
+        
+    } catch (err) {
+        showError(err.message);
+        resetButton();
+    }
+});
+
+async function checkStatus(taskId) {
+    try {
+        const res = await fetch(`/api/status/${taskId}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        const task = data.task;
+        
+        // 更新进度
+        updateProgress(task.progress, task.message);
+        
+        if (task.status === 'completed') {
+            clearInterval(checkInterval);
+            showResult(task.result);
+            resetButton();
+        } else if (task.status === 'failed') {
+            clearInterval(checkInterval);
+            showError(task.error || '处理失败，请检查链接是否正确');
+            resetButton();
+        }
+        
+    } catch (err) {
+        clearInterval(checkInterval);
+        showError(err.message);
+        resetButton();
+    }
+}
+
+function updateProgress(percent, message) {
+    document.getElementById('progressFill').style.width = percent + '%';
+    document.getElementById('progressPercent').textContent = percent + '%';
+    document.getElementById('statusText').textContent = message || '处理中...';
+}
+
+function showResult(result) {
+    document.getElementById('progressSection').style.display = 'none';
+    document.getElementById('resultSection').style.display = 'block';
+    
+    // 显示歌曲名
+    document.getElementById('songName').textContent = result.title || '未知歌曲';
+    
+    // 设置下载链接
+    const downloadBtn = document.getElementById('downloadBtn');
+    if (result.mp3_filename) {
+        downloadBtn.href = `/api/download/${encodeURIComponent(result.mp3_filename)}`;
+        downloadBtn.download = result.mp3_filename;
+    }
+}
+
+function showError(message) {
+    document.getElementById('progressSection').style.display = 'none';
+    const errorSection = document.getElementById('errorSection');
+    errorSection.innerHTML = `<div class="error-box">❌ ${message}</div>`;
+    errorSection.style.display = 'block';
+}
+
+function resetButton() {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<span>🚀 开始提取 MP3</span>';
+}
+
+// 页面加载时检查是否有历史任务（可选）
+document.addEventListener('DOMContentLoaded', () => {
+    // 可以在这里加载最近任务列表
+});
+</script>
+{% endblock %}
