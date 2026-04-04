@@ -36,61 +36,97 @@ tangdou-web/
 │   └── index.html
 ├── static/downloads/       # 下载文件存储
 └── scripts/                # 部署脚本
-    ├── install.sh          # Ubuntu系统服务安装脚本
-    ├── simple-run.sh       # 简单运行脚本（无需root）
-    ├── start-dev.sh        # 开发启动脚本
-    ├── deploy.sh           # 快速部署脚本
-    └── uninstall.sh        # 清理卸载脚本
+    ├── install.sh              # 系统级安装（需要sudo）
+    ├── install-user-service.sh # 用户级服务安装（推荐⭐）
+    ├── simple-run.sh           # 简单运行（前台）
+    ├── start-dev.sh            # 开发启动
+    ├── deploy.sh               # 快速部署
+    └── uninstall.sh            # 清理卸载
 ```
 
 ## 🚀 部署方式
 
-### 方式一：简单运行（推荐个人使用）
+### 方式一：用户级服务（推荐⭐）
 
-适合临时使用或测试，无需 root 权限，不安装系统服务。
+**无需 sudo**，后台常驻运行，支持开机自启。
 
 ```bash
-# 1. 将代码放到任意目录，例如 /opt
-git clone <你的仓库地址> /opt/tangdou-web
-cd /opt/tangdou-web
+# 1. 下载代码到用户目录
+cd ~
+git clone <你的仓库地址> tangdou-web
+cd tangdou-web
 
-# 2. 运行简单启动脚本
-sudo bash scripts/simple-run.sh
+# 2. 安装用户服务（无需 sudo！）
+bash scripts/install-user-service.sh
 
-# 或手动启动
-cd /opt/tangdou-web
-uv venv
-source .venv/bin/activate
-uv pip install flask gunicorn requests beautifulsoup4 lxml
-python app.py
+# 3. 按提示启动服务即可
 ```
 
-访问地址：**http://<服务器IP>:5000**
+**管理命令（无需 sudo）：**
+```bash
+# 启动/停止/重启
+systemctl --user start tangdou-mp3
+systemctl --user stop tangdou-mp3
+systemctl --user restart tangdou-mp3
 
-### 方式二：系统服务安装（推荐长期运行）
+# 查看状态
+systemctl --user status tangdou-mp3
 
-适合服务器长期运行，开机自启，后台守护。
+# 查看日志
+journalctl --user -u tangdou-mp3 -f
+
+# 开机自启（已默认启用）
+systemctl --user enable tangdou-mp3
+```
+
+**访问地址：** `http://<服务器IP>:18080`
+
+> 💡 **提示**：用户服务默认在用户登出后停止。如需后台常驻（即使登出也运行）：
+> ```bash
+> sudo loginctl enable-linger $USER
+> ```
+
+---
+
+### 方式二：系统级服务（需要 sudo）
+
+适合多用户共享的服务器，需要 root 权限。
 
 ```bash
-# 1. 上传代码到服务器
-git clone <你的仓库地址> /home/user/tangdou-web
-cd /home/user/tangdou-web
+# 1. 下载代码
+cd ~
+git clone <你的仓库地址> tangdou-web
+cd tangdou-web
 
-# 2. 运行安装脚本（会自动复制代码到 /opt/tangdou-mp3）
+# 2. 安装系统服务
 sudo bash scripts/install.sh
 
-# 3. 启动 Tailscale
-sudo tailscale up
+# 3. 选择安装方式：
+#    1) 系统目录 (/opt/tangdou-mp3) - 需要 sudo
+#    2) 用户目录 ($HOME/tangdou-mp3) - 无需 sudo
 
 # 4. 启动服务
-sudo systemctl daemon-reload
-sudo systemctl enable tangdou-mp3
 sudo systemctl start tangdou-mp3
 ```
 
-访问地址：**http://<Tailscale-IP>:18080**
+---
 
-> 注意：使用非标准端口 `18080` 避免与系统其他服务冲突
+### 方式三：简单运行（前台运行）
+
+适合临时测试，关闭终端即停止。
+
+```bash
+cd ~/tangdou-web
+sudo bash scripts/simple-run.sh
+```
+
+或手动：
+```bash
+cd ~/tangdou-web
+uv venv && source .venv/bin/activate
+uv pip install flask gunicorn requests beautifulsoup4 lxml
+python app.py
+```
 
 ---
 
@@ -117,48 +153,27 @@ python app.py
 
 ---
 
-## 📊 管理命令
-
-### 系统服务方式
-
-```bash
-# 查看服务状态
-sudo systemctl status tangdou-mp3
-
-# 查看日志
-sudo journalctl -u tangdou-mp3 -f
-
-# 重启服务
-sudo systemctl restart tangdou-mp3
-
-# 停止服务
-sudo systemctl stop tangdou-mp3
-```
-
-### 简单运行方式
-
-```bash
-# 直接 Ctrl+C 停止
-# 或使用 pkill
-pkill -f "python app.py"
-```
-
----
-
 ## 🧹 清理环境
 
+### 用户级服务清理
 ```bash
-# 使用卸载脚本（删除系统服务和文件）
-cd /path/to/tangdou-web
-sudo bash scripts/uninstall.sh
+# 停止并禁用服务
+systemctl --user stop tangdou-mp3
+systemctl --user disable tangdou-mp3
 
-# 或手动清理
-sudo systemctl stop tangdou-mp3
-sudo systemctl disable tangdou-mp3
-sudo rm -f /etc/systemd/system/tangdou-mp3.service
-sudo rm -f /etc/nginx/sites-available/tangdou-mp3
-sudo rm -rf /opt/tangdou-mp3
-sudo systemctl restart nginx
+# 删除服务文件
+rm ~/.config/systemd/user/tangdou-mp3.service
+
+# 删除安装目录
+rm -rf ~/tangdou-mp3
+
+# 重载配置
+systemctl --user daemon-reload
+```
+
+### 系统级服务清理
+```bash
+sudo bash scripts/uninstall.sh
 ```
 
 ---
@@ -167,22 +182,19 @@ sudo systemctl restart nginx
 
 | 用途 | 端口 | 说明 |
 |------|------|------|
-| HTTP 外部端口 | **18080** | Nginx 对外服务，避免 80 端口冲突 |
-| 内部服务端口 | **15000** | Gunicorn 内部端口，避免常用端口 |
-| 开发端口 | **5000** | Flask 开发服务器默认端口 |
+| 开发/简单模式 | **5000** | Flask 默认端口 |
+| 用户/系统服务 | **18080** | Gunicorn 服务端口 |
 
-如需修改端口：
+---
 
-```bash
-# 系统服务方式 - 修改外部端口（Nginx）
-sudo nano /etc/nginx/sites-available/tangdou-mp3
+## 📂 目录选择建议
 
-# 系统服务方式 - 修改内部端口（Gunicorn）
-nano /opt/tangdou-mp3/gunicorn.conf.py
-
-# 简单运行方式 - 修改端口
-# 编辑 scripts/simple-run.sh 中的 PORT 变量
-```
+| 场景 | 推荐目录 | 是否需要 sudo |
+|------|---------|--------------|
+| 个人使用 | `~/tangdou-web` 或 `~/tangdou-mp3` | ❌ 不需要 |
+| 家庭服务器 | `~/tangdou-web` | ❌ 不需要 |
+| VPS/云服务器 | `~/tangdou-web` | ❌ 不需要 |
+| 多用户共享 | `/opt/tangdou-mp3` | ⚠️ 需要 |
 
 ---
 
@@ -200,7 +212,7 @@ nano /opt/tangdou-mp3/gunicorn.conf.py
 
 ## ⚠️ 注意事项
 
-1. **FFmpeg 必须安装** - 脚本会自动安装，如失败请手动安装
+1. **FFmpeg 必须安装** - 脚本会自动检查，如失败请手动安装
 2. **磁盘空间** - 下载的视频会临时存储，定期自动清理
 3. **Tailscale 网络** - 手机需要安装 Tailscale 并登录同一账号
 4. **版权说明** - 请仅下载自己有权限使用的视频

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 糖豆MP3提取器 - 简单运行脚本
-# 不安装系统服务，直接在 /opt 或其他目录下运行
+# 无需 root，可在任意目录运行
 
 set -e
 
@@ -38,7 +38,7 @@ if [ ! -f "$CODE_DIR/app.py" ]; then
 fi
 
 echo "[1/3] 检查依赖..."
-cd $CODE_DIR
+cd "$CODE_DIR"
 
 # 创建虚拟环境（如果不存在）
 if [ ! -d ".venv" ]; then
@@ -63,8 +63,8 @@ mkdir -p static/downloads
 
 echo "[2/3] 选择运行方式："
 echo ""
-echo "  1) 开发模式 (flask run) - 适合调试，自动重载"
-echo "  2) 生产模式 (gunicorn) - 适合长期使用"
+echo "  1) 开发模式 (flask run) - 适合调试，自动重载，端口5000"
+echo "  2) 生产模式 (gunicorn) - 适合长期使用，端口18080"
 echo ""
 read -p "请选择 [1/2] (默认: 1): " choice
 choice=${choice:-1}
@@ -78,6 +78,7 @@ if [ "$choice" = "2" ]; then
     PORT=${1:-18080}
     echo "🚀 生产模式启动 (端口: $PORT)"
     echo "   访问地址: http://<服务器IP>:$PORT"
+    echo "   按 Ctrl+C 停止服务"
     echo ""
     
     # 使用 gunicorn 启动
@@ -90,8 +91,9 @@ if [ "$choice" = "2" ]; then
         wsgi:app
 else
     # 开发模式
-    echo "🚀 开发模式启动"
+    echo "🚀 开发模式启动 (端口: 5000)"
     echo "   访问地址: http://<服务器IP>:5000"
+    echo "   按 Ctrl+C 停止服务"
     echo ""
     
     export FLASK_APP=app.py

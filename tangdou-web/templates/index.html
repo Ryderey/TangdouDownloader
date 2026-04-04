@@ -123,9 +123,12 @@ document.getElementById('extractForm').addEventListener('submit', async (e) => {
 });
 
 async function checkStatus(taskId) {
+    console.log('查询任务:', taskId);  // 调试信息
     try {
         const res = await fetch(`/api/status/${taskId}`);
+        console.log('状态响应:', res.status);  // 调试信息
         const data = await res.json();
+        console.log('状态数据:', data);  // 调试信息
         
         if (data.error) {
             throw new Error(data.error);

@@ -21,6 +21,12 @@ class VideoDownloader:
     QUALITY_ORDER = ['V360P', 'H360P', 'V540P', 'H540P', 'V720P', 'H720P', 'V1080P', 'H1080P', 'unknown']
     
     def __init__(self, download_dir: str = "static/downloads"):
+        # 转换为绝对路径，避免工作目录变化导致的问题
+        if not os.path.isabs(download_dir):
+            # 获取当前文件所在目录（modules/）的上级目录
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            download_dir = os.path.join(base_dir, download_dir)
+        
         self.download_dir = download_dir
         self.api = VideoAPI()
         os.makedirs(download_dir, exist_ok=True)
