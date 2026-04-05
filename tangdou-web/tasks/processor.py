@@ -237,7 +237,7 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
     # 获取或创建任务
     task = store.get(task_id)
     if not task:
-        task = Task(Task(id=task_id, url=url, skip_seconds=skip_seconds)
+        task = Task(id=task_id, url=url, skip_seconds=skip_seconds)
     
     video_path = None
     

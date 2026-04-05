@@ -118,14 +118,19 @@ class VideoDownloader:
         
         downloaded = 0
         chunk_size = 8192
+        last_reported_percent = 0
         
         with open(filepath, "wb") as f:
             for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     f.write(chunk)
                     downloaded += len(chunk)
-                    if progress_callback:
-                        progress_callback(downloaded, total_size)
+                    if progress_callback and total_size > 0:
+                        current_percent = int((downloaded / total_size) * 100)
+                        # 只有当进度变化超过5%时才报告
+                        if current_percent - last_reported_percent >= 5 or current_percent == 100:
+                            progress_callback(downloaded, total_size)
+                            last_reported_percent = current_percent
         
         print(f"[下载] 完成: {filename} ({downloaded/1024/1024:.2f} MB)")
         return filepath
@@ -225,7 +230,7 @@ class VideoDownloader:
         
         def download_progress(downloaded, total):
             if total > 0 and progress_callback:
-                percent = int(30 + (downloaded / total) * 30)  # 30-60%
+                percent = int(30 + (downloaded / total) * 40)  # 30-70% 范围
                 progress_callback("download", percent)
         
         video_path = self.download(info, download_progress)
@@ -236,7 +241,7 @@ class VideoDownloader:
         
         # 3. 剪辑并转MP3
         if progress_callback:
-            progress_callback("convert", 70)
+            progress_callback("convert", 80)
         
         # 生成输出文件名
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", info["name"])
