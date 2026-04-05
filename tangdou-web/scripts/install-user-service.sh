@@ -10,9 +10,11 @@ echo "  糖豆MP3提取器 - 用户服务安装"
 echo "=========================================="
 echo ""
 
-# 获取脚本所在目录
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CODE_DIR="$(dirname "$SCRIPT_DIR")"
+# 配置
+APP_NAME="tangdou-mp3"
+# 直接使用代码所在目录，不复制到固定位置
+CODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INSTALL_DIR="$CODE_DIR"
 
 echo "📁 代码目录: $CODE_DIR"
 echo ""
@@ -22,14 +24,10 @@ if [ ! -f "$CODE_DIR/app.py" ]; then
     echo "❌ 错误：无法找到 app.py"
     exit 1
 fi
-
-# 配置
-APP_NAME="tangdou-mp3"
-INSTALL_DIR="$HOME/$APP_NAME"
 PORT=${1:-18080}  # 默认端口 18080
 
 echo "📌 安装信息："
-echo "   安装目录: $INSTALL_DIR"
+echo "   运行目录: $INSTALL_DIR"
 echo "   服务名称: $APP_NAME"
 echo "   运行端口: $PORT"
 echo ""
@@ -62,36 +60,13 @@ fi
 echo "✅ 依赖检查完成"
 echo ""
 
-echo "[2/6] 复制代码到 $INSTALL_DIR..."
+echo "[2/6] 检查目录结构..."
 
-# 如果目录已存在，询问是否覆盖
-if [ -d "$INSTALL_DIR" ] && [ "$INSTALL_DIR" != "$CODE_DIR" ]; then
-    read -p "   目录 $INSTALL_DIR 已存在，是否覆盖? [y/N]: " confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-        rm -rf "$INSTALL_DIR"
-    else
-        echo "❌ 已取消"
-        exit 1
-    fi
-fi
-
-# 如果代码已经在目标位置，跳过复制
-if [ "$CODE_DIR" != "$INSTALL_DIR" ]; then
-    rsync -av --delete \
-        --exclude='.git' \
-        --exclude='__pycache__' \
-        --exclude='*.pyc' \
-        --exclude='.venv' \
-        --exclude='venv' \
-        --exclude='static/downloads/*' \
-        "$CODE_DIR/" "$INSTALL_DIR/"
-fi
-
-# 创建 downloads 目录
+# 确保 downloads 目录存在
 mkdir -p "$INSTALL_DIR/static/downloads"
 touch "$INSTALL_DIR/static/downloads/.gitkeep"
 
-echo "✅ 代码复制完成"
+echo "✅ 目录检查完成"
 echo ""
 
 echo "[3/6] 创建 Python 虚拟环境..."
@@ -177,7 +152,7 @@ echo "🌐 访问地址:"
 echo "  http://$(hostname -I | awk '{print $1}'):$PORT"
 echo "  http://127.0.0.1:$PORT"
 echo ""
-echo "📁 安装目录: $INSTALL_DIR"
+echo "📁 运行目录: $INSTALL_DIR"
 echo "📜 日志文件: $INSTALL_DIR/logs/"
 echo ""
 echo "⚠️  注意：用户服务默认在登出后停止"

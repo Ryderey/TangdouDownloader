@@ -62,7 +62,8 @@ bash scripts/install-user-service.sh
 # 3. 按提示启动服务即可
 ```
 
-**管理命令（无需 sudo）：**
+#### 管理命令（无需 sudo）：
+
 ```bash
 # 启动/停止/重启
 systemctl --user start tangdou-mp3

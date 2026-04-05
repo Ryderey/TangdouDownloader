@@ -49,6 +49,20 @@
         <p class="status-text" id="statusText">准备中...</p>
     </div>
     
+    <!-- 日志查看区域 - 独立于进度区域，始终可访问 -->
+    <div class="log-section" id="logSection" style="display: none;">
+        <div class="log-toggle">
+            <a href="#" id="toggleLog">📋 查看详细日志</a>
+        </div>
+        <div class="log-container" id="logContainer" style="display: none;">
+            <div class="log-header">
+                <span>执行日志</span>
+                <button class="btn-copy" id="copyLogBtn">📋 复制</button>
+            </div>
+            <pre class="log-content" id="logContent"></pre>
+        </div>
+    </div>
+    
     <!-- 结果展示 -->
     <div class="result-section" id="resultSection" style="display: none;">
         <div class="result-title success" id="resultTitle">
@@ -71,6 +85,7 @@
 {% block extra_js %}
 <script>
 let checkInterval = null;
+let currentLogs = [];
 
 // 切换高级选项
 document.getElementById('toggleAdvanced').addEventListener('click', (e) => {
@@ -79,15 +94,44 @@ document.getElementById('toggleAdvanced').addEventListener('click', (e) => {
     options.classList.toggle('show');
 });
 
+// 切换日志显示
+document.getElementById('toggleLog').addEventListener('click', (e) => {
+    e.preventDefault();
+    const container = document.getElementById('logContainer');
+    const isHidden = container.style.display === 'none';
+    container.style.display = isHidden ? 'block' : 'none';
+    // 更新按钮文字
+    e.target.textContent = isHidden ? '📋 收起详细日志' : '📋 查看详细日志';
+});
+
+// 复制日志
+document.getElementById('copyLogBtn').addEventListener('click', () => {
+    const logText = currentLogs.map(l => `[${l.time}] [${l.level}] ${l.message}`).join('\n');
+    navigator.clipboard.writeText(logText).then(() => {
+        const btn = document.getElementById('copyLogBtn');
+        btn.textContent = '✅ 已复制';
+        setTimeout(() => btn.textContent = '📋 复制', 2000);
+    });
+});
+
 // 表单提交
 document.getElementById('extractForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     // 重置状态
     clearInterval(checkInterval);
+    currentLogs = [];
+    updateLogDisplay();
     document.getElementById('errorSection').style.display = 'none';
     document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('logContainer').style.display = 'none';
+    document.getElementById('logSection').style.display = 'block';
+    document.getElementById('toggleLog').textContent = '📋 查看详细日志';
     document.getElementById('progressSection').style.display = 'block';
+    // 重置进度条样式
+    document.getElementById('progressFill').style.background = '';
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('statusText').style.color = '';
     
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
@@ -123,18 +167,21 @@ document.getElementById('extractForm').addEventListener('submit', async (e) => {
 });
 
 async function checkStatus(taskId) {
-    console.log('查询任务:', taskId);  // 调试信息
     try {
         const res = await fetch(`/api/status/${taskId}`);
-        console.log('状态响应:', res.status);  // 调试信息
         const data = await res.json();
-        console.log('状态数据:', data);  // 调试信息
         
         if (data.error) {
             throw new Error(data.error);
         }
         
         const task = data.task;
+        
+        // 更新日志
+        if (task.logs && task.logs.length > 0) {
+            currentLogs = task.logs;
+            updateLogDisplay();
+        }
         
         // 更新进度
         updateProgress(task.progress, task.message);
@@ -145,7 +192,7 @@ async function checkStatus(taskId) {
             resetButton();
         } else if (task.status === 'failed') {
             clearInterval(checkInterval);
-            showError(task.error || '处理失败，请检查链接是否正确');
+            showError(task.error || '处理失败，请检查链接是否正确', task.logs);
             resetButton();
         }
         
@@ -162,6 +209,13 @@ function updateProgress(percent, message) {
     document.getElementById('statusText').textContent = message || '处理中...';
 }
 
+function updateLogDisplay() {
+    const container = document.getElementById('logContent');
+    container.textContent = currentLogs.map(l => `[${l.time}] [${l.level}] ${l.message}`).join('\n');
+    // 自动滚动到底部
+    container.scrollTop = container.scrollHeight;
+}
+
 function showResult(result) {
     document.getElementById('progressSection').style.display = 'none';
     document.getElementById('resultSection').style.display = 'block';
@@ -175,13 +229,30 @@ function showResult(result) {
         downloadBtn.href = `/api/download/${encodeURIComponent(result.mp3_filename)}`;
         downloadBtn.download = result.mp3_filename;
     }
+    
+    // 成功时保持日志区域可见，但收起日志详情
+    document.getElementById('logSection').style.display = 'block';
+    document.getElementById('logContainer').style.display = 'none';
+    document.getElementById('toggleLog').textContent = '📋 查看详细日志';
 }
 
-function showError(message) {
-    document.getElementById('progressSection').style.display = 'none';
+function showError(message, logs) {
+    // 更改进度条颜色为红色表示失败
+    document.getElementById('progressFill').style.width = '100%';
+    document.getElementById('progressFill').style.background = '#ef4444';
+    document.getElementById('statusText').textContent = '❌ ' + message;
+    document.getElementById('statusText').style.color = '#ef4444';
+    
+    // 显示错误区域（在进度区域下方）
     const errorSection = document.getElementById('errorSection');
     errorSection.innerHTML = `<div class="error-box">❌ ${message}</div>`;
     errorSection.style.display = 'block';
+    
+    // 确保日志区域可见，失败时日志更重要
+    document.getElementById('logSection').style.display = 'block';
+    // 自动展开日志（关键！确保失败后能看到日志）
+    document.getElementById('logContainer').style.display = 'block';
+    document.getElementById('toggleLog').textContent = '📋 收起详细日志';
 }
 
 function resetButton() {
@@ -189,10 +260,76 @@ function resetButton() {
     submitBtn.disabled = false;
     submitBtn.innerHTML = '<span>🚀 开始提取 MP3</span>';
 }
-
-// 页面加载时检查是否有历史任务（可选）
-document.addEventListener('DOMContentLoaded', () => {
-    // 可以在这里加载最近任务列表
-});
 </script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 日志区域样式 - 独立于进度区域 */
+.log-section {
+    margin-top: 16px;
+}
+
+.log-toggle {
+    text-align: center;
+    padding: 8px 0;
+}
+
+.log-toggle a {
+    color: #667eea;
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.log-container {
+    margin-top: 12px;
+    background: #1a1a2e;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: #16213e;
+    color: #fff;
+    font-size: 13px;
+}
+
+.btn-copy {
+    padding: 6px 12px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn-copy:hover {
+    background: #5a6fd6;
+}
+
+.log-content {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    margin: 0;
+    color: #a8d8ea;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.log-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.log-content::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 3px;
+}
+</style>
 {% endblock %}
