@@ -113,18 +113,66 @@ class TaskStore:
             print(f"[TaskStore] 读取任务失败: {e}")
             return None
     
-    def cleanup_old(self, max_age_hours: int = 24):
-        """清理旧任务文件"""
+    def cleanup_old(self, max_age_hours: int = 24, delete_mp3: bool = True) -> int:
+        """
+        清理旧任务文件及关联的MP3文件
+        :param max_age_hours: 文件保留时间（小时）
+        :param delete_mp3: 是否同时删除MP3文件
+        :return: 清理的文件数量
+        """
         now = time.time()
+        cutoff_time = now - max_age_hours * 3600
+        cleaned_count = 0
+        
         for filename in os.listdir(self.tasks_dir):
             if not filename.endswith('.json'):
                 continue
+                
             filepath = os.path.join(self.tasks_dir, filename)
-            if os.path.getmtime(filepath) < now - max_age_hours * 3600:
+            
+            # 检查文件是否过期
+            if os.path.getmtime(filepath) < cutoff_time:
+                # 先读取任务信息，获取MP3文件路径
+                mp3_files_to_delete = []
+                if delete_mp3:
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            task_data = json.load(f)
+                        
+                        # 获取MP3文件路径
+                        result = task_data.get('result', {})
+                        mp3_path = result.get('mp3_path')
+                        mp3_filename = result.get('mp3_filename')
+                        
+                        if mp3_path and os.path.exists(mp3_path):
+                            mp3_files_to_delete.append(mp3_path)
+                        elif mp3_filename:
+                            # 尝试拼接完整路径
+                            full_path = os.path.join(self.data_dir, mp3_filename)
+                            if os.path.exists(full_path):
+                                mp3_files_to_delete.append(full_path)
+                    except Exception as e:
+                        print(f"[Cleanup] 读取任务文件失败: {e}")
+                
+                # 删除任务JSON文件
                 try:
                     os.remove(filepath)
-                except:
-                    pass
+                    cleaned_count += 1
+                    print(f"[Cleanup] 已删除任务文件: {filename}")
+                except Exception as e:
+                    print(f"[Cleanup] 删除任务文件失败: {e}")
+                    continue
+                
+                # 删除关联的MP3文件
+                for mp3_file in mp3_files_to_delete:
+                    try:
+                        os.remove(mp3_file)
+                        cleaned_count += 1
+                        print(f"[Cleanup] 已删除MP3文件: {os.path.basename(mp3_file)}")
+                    except Exception as e:
+                        print(f"[Cleanup] 删除MP3文件失败: {e}")
+        
+        return cleaned_count
 
 
 class TaskProcessor:
@@ -168,6 +216,7 @@ class TaskProcessor:
     
     def _process_task(self, task: Task):
         """处理单个任务"""
+        video_path = None
         try:
             task.status = "downloading"
             task.message = "正在下载视频..."
@@ -192,9 +241,12 @@ class TaskProcessor:
                 task_check=task_check
             )
             
-            # 清理视频文件
-            if "video_path" in result:
-                self.downloader.cleanup(result["video_path"], keep_video=False)
+            # 记录视频路径用于后续清理
+            video_path = result.get("video_path")
+            
+            # 清理临时视频文件（保留MP3）
+            if video_path:
+                self.downloader.cleanup(video_path, keep_video=False)
             
             task.result = result
             task.status = "completed"
@@ -204,6 +256,14 @@ class TaskProcessor:
             task.add_log('success', '处理完成')
             
         except Exception as e:
+            # 异常时也要清理临时视频文件
+            if video_path:
+                try:
+                    self.downloader.cleanup(video_path, keep_video=False)
+                    task.add_log('info', '已清理临时文件')
+                except Exception as cleanup_err:
+                    task.add_log('warning', f'清理临时文件失败: {cleanup_err}')
+            
             task.status = "failed"
             task.error = str(e)
             task.message = f"处理失败: {e}"
@@ -250,12 +310,43 @@ class TaskProcessor:
         """获取任务状态（从文件读取）"""
         return self.store.get(task_id)
     
+    def get_all_tasks(self, limit: int = 100) -> list:
+        """获取所有任务列表"""
+        tasks = []
+        try:
+            for filename in os.listdir(self.store.tasks_dir):
+                if filename.endswith('.json'):
+                    task_id = filename[:-5]  # 去掉 .json
+                    task = self.get_task(task_id)
+                    if task:
+                        tasks.append(task)
+        except Exception as e:
+            print(f"[任务列表] 读取失败: {e}")
+        
+        # 按创建时间倒序
+        tasks.sort(key=lambda t: t.created_at, reverse=True)
+        return tasks[:limit]
+    
+    def cleanup_old_files(self, max_age_hours: int = 24) -> int:
+        """
+        清理旧的MP3文件和任务状态文件
+        :param max_age_hours: 文件保留时间（小时），0表示清理所有
+        :return: 清理的文件数量
+        """
+        print(f"[清理] 开始清理，保留时间: {max_age_hours} 小时")
+        count = self.store.cleanup_old(max_age_hours=max_age_hours, delete_mp3=True)
+        print(f"[清理] 完成，共清理 {count} 个文件")
+        return count
+    
     def _cleanup_loop(self):
-        """定期清理旧文件"""
+        """定期清理旧文件 - 每小时运行一次"""
+        print("[清理] 定时清理任务已启动，间隔: 1小时")
         while not self._shutdown:
-            time.sleep(3600)
+            time.sleep(3600)  # 每小时检查一次
             try:
-                self.store.cleanup_old(max_age_hours=24)
+                cleaned = self.store.cleanup_old(max_age_hours=24, delete_mp3=True)
+                if cleaned > 0:
+                    print(f"[清理] 自动清理完成，共清理 {cleaned} 个文件")
             except Exception as e:
                 print(f"[清理] 错误: {e}")
     

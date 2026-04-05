@@ -62,7 +62,7 @@ bash scripts/install-user-service.sh
 # 3. 按提示启动服务即可
 ```
 
-#### 管理命令（无需 sudo）：
+### 管理命令（无需 sudo）：
 
 ```bash
 # 启动/停止/重启
@@ -178,6 +178,29 @@ sudo bash scripts/uninstall.sh
 ```
 
 ---
+
+### 清理下载残留文件
+
+会自动定时删除残留文件，下面列举手动调接口删除残留：
+
+```bash
+# 手动清理（默认清理24小时前的文件）：
+curl -X POST http://localhost:18080/api/cleanup \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+
+# 清理所有历史文件：
+curl -X POST http://localhost:18080/api/cleanup \
+  -H "Content-Type: application/json" \
+  -d '{"max_age_hours": 0}'
+  
+# 查看存储使用情况：
+curl http://localhost:18080/api/storage-info
+
+```
+
+
 
 ## 🔒 端口说明
 

@@ -160,12 +160,71 @@ def list_tasks():
 
 @app.route('/api/cleanup', methods=['POST'])
 def cleanup():
-    """手动触发清理"""
+    """手动触发清理 - 默认清理24小时前的文件"""
     try:
-        count = processor.cleanup_old_files(max_age_hours=0)  # 立即清理所有
+        data = request.get_json() or {}
+        # 获取清理时间（小时），默认24小时，0表示清理所有
+        max_age_hours = data.get('max_age_hours', 24)
+        
+        count = processor.cleanup_old_files(max_age_hours=max_age_hours)
+        
+        if max_age_hours == 0:
+            message = f'已清理所有历史文件，共 {count} 个'
+        else:
+            message = f'已清理 {max_age_hours} 小时前的文件，共 {count} 个'
+        
         return jsonify({
             'success': True, 
-            'message': f'已清理 {count} 个文件'
+            'message': message,
+            'cleaned_count': count,
+            'max_age_hours': max_age_hours
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage-info', methods=['GET'])
+def storage_info():
+    """获取存储使用情况"""
+    try:
+        import os
+        
+        download_dir = os.path.join(app.root_path, 'static/downloads')
+        
+        # 计算目录大小
+        total_size = 0
+        mp3_count = 0
+        task_count = 0
+        
+        if os.path.exists(download_dir):
+            for root, dirs, files in os.walk(download_dir):
+                for file in files:
+                    filepath = os.path.join(root, file)
+                    try:
+                        size = os.path.getsize(filepath)
+                        total_size += size
+                        if file.endswith('.mp3'):
+                            mp3_count += 1
+                        elif file.endswith('.json'):
+                            task_count += 1
+                    except:
+                        pass
+        
+        # 转换大小为可读格式
+        def format_size(size_bytes):
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size_bytes < 1024:
+                    return f"{size_bytes:.2f} {unit}"
+                size_bytes /= 1024
+            return f"{size_bytes:.2f} TB"
+        
+        return jsonify({
+            'success': True,
+            'total_size_bytes': total_size,
+            'total_size_formatted': format_size(total_size),
+            'mp3_count': mp3_count,
+            'task_count': task_count,
+            'download_dir': download_dir
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
