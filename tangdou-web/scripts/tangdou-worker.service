@@ -1,0 +1,24 @@
+[Unit]
+Description=Tangdou MP3 Extractor Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=ryl
+WorkingDirectory=/home/ryl/script/tangdou-web
+
+# 环境变量
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PORT=6379"
+Environment="REDIS_DB=0"
+Environment="PYTHONUNBUFFERED=1"
+
+# 直接执行命令
+# 注意：队列名 tangdou 是位置参数，不是 --queues 选项
+ExecStart=/bin/bash -c 'cd /home/ryl/script/tangdou-web && .venv/bin/rq worker --name tangdou-worker --url redis://localhost:6379/0 --with-scheduler --results-ttl 604800 --job-ttl 3600 --logging-level INFO tangdou'
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

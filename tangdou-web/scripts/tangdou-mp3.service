@@ -1,0 +1,30 @@
+[Unit]
+Description=Tangdou MP3 Extractor Web Service
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=%I
+WorkingDirectory=/home/%I/script/tangdou-web
+
+# 禁用组设置
+Group=
+SupplementaryGroups=
+
+# 环境变量
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PORT=6379"
+Environment="REDIS_DB=0"
+Environment="PYTHONUNBUFFERED=1"
+
+# 使用绝对路径直接执行
+ExecStart=/home/%I/script/tangdou-web/.venv/bin/python -m gunicorn --bind 0.0.0.0:18080 --workers 2 --timeout 300 --access-logfile /home/%I/script/tangdou-web/logs/access.log --error-logfile /home/%I/script/tangdou-web/logs/error.log wsgi:app
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

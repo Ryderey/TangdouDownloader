@@ -230,6 +230,19 @@ def storage_info():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/queue-stats', methods=['GET'])
+def queue_stats():
+    """获取队列统计信息"""
+    try:
+        stats = processor.get_queue_stats()
+        return jsonify({
+            'success': True,
+            'queue': stats
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(e):
     """404错误处理"""

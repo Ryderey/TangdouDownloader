@@ -20,11 +20,8 @@ class VideoDownloader:
     # 清晰度优先级（从低到高）
     QUALITY_ORDER = ['V360P', 'H360P', 'V540P', 'H540P', 'V720P', 'H720P', 'V1080P', 'H1080P', 'unknown']
     
-    # 类级别缓存，与 TaskStore 保持一致
-    _cached_base_dir = None
-    
     def __init__(self, download_dir: str = "static/downloads"):
-        # 转换为绝对路径，确保与 TaskStore 一致
+        # 转换为绝对路径
         if not os.path.isabs(download_dir):
             base_dir = self._get_base_dir()
             download_dir = os.path.join(base_dir, download_dir)
@@ -38,47 +35,29 @@ class VideoDownloader:
         self._check_ffmpeg()
     
     def _get_base_dir(self) -> str:
-        """获取项目根目录 - 与 TaskStore 保持一致"""
-        # 如果已有缓存，直接使用
-        if VideoDownloader._cached_base_dir is not None:
-            return VideoDownloader._cached_base_dir
-        
-        # 尝试从 TaskStore 获取（如果已加载）
-        try:
-            from tasks.processor import TaskStore
-            if TaskStore._cached_base_dir is not None:
-                VideoDownloader._cached_base_dir = TaskStore._cached_base_dir
-                return TaskStore._cached_base_dir
-        except ImportError:
-            pass
-        
+        """获取项目根目录"""
         # 方法1: 从环境变量获取
         env_dir = os.environ.get('TANGDOU_BASE_DIR')
         if env_dir and os.path.exists(os.path.join(env_dir, 'app.py')):
-            VideoDownloader._cached_base_dir = env_dir
             return env_dir
         
-        # 方法2: 从当前文件位置推导
+        # 方法2: 从当前文件位置推导（modules/downloader.py -> 项目根目录）
         file_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if os.path.exists(os.path.join(file_dir, 'app.py')):
-            VideoDownloader._cached_base_dir = file_dir
             return file_dir
         
         # 方法3: 从工作目录获取
         cwd = os.getcwd()
         if os.path.exists(os.path.join(cwd, 'app.py')):
-            VideoDownloader._cached_base_dir = cwd
             return cwd
         
         # 方法4: 尝试常见路径
         for path in ['/home/ryl/script/tangdou-web', '/home/ryl/tangdou-mp3']:
             if os.path.exists(os.path.join(path, 'app.py')):
-                VideoDownloader._cached_base_dir = path
                 return path
         
-        # 兜底
-        VideoDownloader._cached_base_dir = file_dir
-        return file_dir
+        # 兜底：使用当前文件所在目录的上级
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     def _check_ffmpeg(self):
         """检查FFmpeg是否已安装"""

@@ -3,3 +3,5 @@ gunicorn>=21.0.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
+redis>=5.0.0
+rq>=1.15.0
