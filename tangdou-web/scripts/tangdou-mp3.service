@@ -5,12 +5,7 @@ Wants=redis.service
 
 [Service]
 Type=simple
-User=%I
-WorkingDirectory=/home/%I/script/tangdou-web
-
-# 禁用组设置
-Group=
-SupplementaryGroups=
+WorkingDirectory=/home/ryl/script/tangdou-web
 
 # 环境变量
 Environment="REDIS_HOST=localhost"
@@ -19,7 +14,7 @@ Environment="REDIS_DB=0"
 Environment="PYTHONUNBUFFERED=1"
 
 # 使用绝对路径直接执行
-ExecStart=/home/%I/script/tangdou-web/.venv/bin/python -m gunicorn --bind 0.0.0.0:18080 --workers 2 --timeout 300 --access-logfile /home/%I/script/tangdou-web/logs/access.log --error-logfile /home/%I/script/tangdou-web/logs/error.log wsgi:app
+ExecStart=/home/ryl/script/tangdou-web/.venv/bin/python -m gunicorn --bind 0.0.0.0:18080 --workers 2 --timeout 300 --access-logfile /home/ryl/script/tangdou-web/logs/access.log --error-logfile /home/ryl/script/tangdou-web/logs/error.log wsgi:app
 
 Restart=always
 RestartSec=5
