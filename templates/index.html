@@ -21,15 +21,38 @@
         </div>
         
         <div class="advanced-toggle">
-            <a href="#" id="toggleAdvanced">⚙️ 高级选项</a>
+            <a href="#" id="toggleAdvanced">⚙️ 收起高级选项</a>
         </div>
         
-        <div class="advanced-options" id="advancedOptions">
-            <div class="form-group">
-                <label for="skip_time">⏱️ 跳过片头时间（默认5秒）</label>
-                <input type="text" id="skip_time" placeholder="5" value="5">
-                <p class="hint">格式：秒 或 分:秒，如 5 或 0:05</p>
+        <div class="advanced-options show" id="advancedOptions">
+            <div class="option-row">
+                <label class="option-checkbox" for="skip_start_enabled">
+                    <input type="checkbox" id="skip_start_enabled" checked>
+                    <span>跳过前面</span>
+                </label>
+                <div class="time-input">
+                    <input type="text" id="skip_time" placeholder="5" value="5">
+                    <span>秒</span>
+                </div>
             </div>
+            <div class="option-row">
+                <label class="option-checkbox" for="trim_end_enabled">
+                    <input type="checkbox" id="trim_end_enabled" checked>
+                    <span>跳过后面</span>
+                </label>
+                <div class="time-input">
+                    <input type="text" id="trim_end_time" placeholder="3" value="3">
+                    <span>秒</span>
+                </div>
+            </div>
+            <div class="option-row">
+                <label class="option-checkbox" for="repeat_concat_enabled">
+                    <input type="checkbox" id="repeat_concat_enabled" checked>
+                    <span>重复拼接</span>
+                </label>
+                <div class="repeat-badge">x2</div>
+            </div>
+            <p class="hint">时间格式：秒 或 分:秒，如 5 或 0:05</p>
         </div>
         
         <button type="submit" class="btn" id="submitBtn">
@@ -92,7 +115,17 @@ document.getElementById('toggleAdvanced').addEventListener('click', (e) => {
     e.preventDefault();
     const options = document.getElementById('advancedOptions');
     options.classList.toggle('show');
+    e.target.textContent = options.classList.contains('show') ? '⚙️ 收起高级选项' : '⚙️ 高级选项';
 });
+
+function syncOptionInputs() {
+    document.getElementById('skip_time').disabled = !document.getElementById('skip_start_enabled').checked;
+    document.getElementById('trim_end_time').disabled = !document.getElementById('trim_end_enabled').checked;
+}
+
+document.getElementById('skip_start_enabled').addEventListener('change', syncOptionInputs);
+document.getElementById('trim_end_enabled').addEventListener('change', syncOptionInputs);
+syncOptionInputs();
 
 // 切换日志显示
 document.getElementById('toggleLog').addEventListener('click', (e) => {
@@ -175,7 +208,11 @@ document.getElementById('extractForm').addEventListener('submit', async (e) => {
     
     const data = {
         url: document.getElementById('url').value.trim(),
-        skip_time: document.getElementById('skip_time').value
+        skip_start_enabled: document.getElementById('skip_start_enabled').checked,
+        skip_time: document.getElementById('skip_time').value,
+        trim_end_enabled: document.getElementById('trim_end_enabled').checked,
+        trim_end_time: document.getElementById('trim_end_time').value,
+        repeat_concat_enabled: document.getElementById('repeat_concat_enabled').checked
     };
     
     try {
@@ -258,6 +295,11 @@ function showResult(result) {
     
     // 显示歌曲名
     document.getElementById('songName').textContent = result.title || '未知歌曲';
+    const skipSeconds = result.skip_seconds ?? 5;
+    const trimEndSeconds = result.trim_end_seconds ?? 3;
+    const repeatCount = result.repeat_count ?? 2;
+    document.getElementById('songDetail').textContent =
+        `MP3 格式 · 前裁 ${skipSeconds}s · 后裁 ${trimEndSeconds}s · 拼接 x${repeatCount}`;
     
     // 设置下载链接
     const downloadBtn = document.getElementById('downloadBtn');
@@ -366,6 +408,69 @@ function resetButton() {
 .log-content::-webkit-scrollbar-thumb {
     background: #667eea;
     border-radius: 3px;
+}
+
+.option-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.option-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: #444;
+}
+
+.option-checkbox input {
+    width: 18px;
+    height: 18px;
+    accent-color: #667eea;
+}
+
+.time-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #666;
+    font-size: 14px;
+}
+
+.time-input input {
+    width: 76px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.time-input input:disabled {
+    background: #f3f4f6;
+    color: #aaa;
+}
+
+.repeat-badge {
+    min-width: 76px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f0f4ff;
+    color: #667eea;
+    font-weight: 700;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .option-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .time-input input,
+    .repeat-badge {
+        width: 90px;
+    }
 }
 </style>
 {% endblock %}

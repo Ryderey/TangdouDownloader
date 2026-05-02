@@ -1,6 +1,6 @@
 """
 视频下载器 - 使用FFmpeg进行高效处理
-优化策略：下载低清视频 + 剪前5秒广告 + 转MP3
+优化策略：下载低清视频 + 剪前后广告 + 可重复拼接 + 转MP3
 """
 
 import os
@@ -536,11 +536,58 @@ class VideoDownloader:
         print(f"[下载] 完成: {filename} ({downloaded/1024/1024:.2f} MB)")
         return filepath
     
+    def get_media_duration(self, media_path: str | Path) -> float:
+        payload = self._probe_media_file(media_path)
+        duration = self._extract_duration_seconds(payload)
+        if duration <= 0:
+            raise RuntimeError("无法获取媒体时长，无法执行裁剪")
+        return duration
+
+    def _build_audio_filter(
+        self,
+        duration: float,
+        clip_start: int,
+        clip_end: int,
+        repeat_count: int,
+    ) -> tuple[str, str]:
+        clip_start = max(int(clip_start), 0)
+        clip_end = max(int(clip_end), 0)
+        repeat_count = max(int(repeat_count), 1)
+
+        clean_end = duration - clip_end if clip_end else None
+        if clean_end is not None and clean_end <= clip_start + 1:
+            raise RuntimeError(
+                "裁剪时间超过媒体长度，"
+                f"媒体时长 {duration:.2f}s，前裁 {clip_start}s，后裁 {clip_end}s"
+            )
+        if clean_end is None and duration <= clip_start + 1:
+            raise RuntimeError(
+                f"裁剪后音频过短，媒体时长 {duration:.2f}s，前裁 {clip_start}s"
+            )
+
+        trim_args = [f"start={clip_start}"]
+        if clean_end is not None:
+            trim_args.append(f"end={clean_end:.3f}")
+        trim_filter = f"atrim={':'.join(trim_args)},asetpts=PTS-STARTPTS"
+
+        if repeat_count <= 1:
+            return f"[0:a]{trim_filter}[outa]", f"{clean_end:.2f}s" if clean_end else "结尾"
+
+        split_labels = "".join(f"[a{index}]" for index in range(repeat_count))
+        concat_inputs = "".join(f"[a{index}]" for index in range(repeat_count))
+        filter_complex = (
+            f"[0:a]{trim_filter},asplit={repeat_count}{split_labels};"
+            f"{concat_inputs}concat=n={repeat_count}:v=0:a=1[outa]"
+        )
+        return filter_complex, f"{clean_end:.2f}s" if clean_end else "结尾"
+
     def clip_and_convert(
         self, 
         input_path: str, 
         output_name: str,
         clip_start: int = 5,  # 默认剪掉前5秒
+        clip_end: int = 3,  # 默认剪掉末尾3秒
+        repeat_count: int = 2,  # 默认把纯净音频重复拼接2遍
         progress_callback: Optional[Callable[[int], None]] = None
     ) -> str:
         """
@@ -548,6 +595,8 @@ class VideoDownloader:
         :param input_path: 输入视频路径
         :param output_name: 输出文件名（不含扩展名）
         :param clip_start: 开始时间（秒），默认5秒跳过广告
+        :param clip_end: 末尾裁剪时间（秒），默认3秒
+        :param repeat_count: 纯净音频重复拼接次数，默认2遍
         :return: MP3文件路径
         """
         output_path = os.path.join(self.download_dir, f"{output_name}.mp3")
@@ -565,9 +614,16 @@ class VideoDownloader:
                 output_file.unlink(missing_ok=True)
 
         partial_output.unlink(missing_ok=True)
+        duration = self.get_media_duration(input_path)
+        filter_complex, clean_end_text = self._build_audio_filter(
+            duration,
+            clip_start,
+            clip_end,
+            repeat_count,
+        )
         
         # 构建FFmpeg命令
-        # -ss 5: 从第5秒开始（跳过广告）
+        # filter_complex: 裁剪前后广告，并按需把纯净音频重复拼接
         # -vn: 禁用视频
         # -ar 44100: 音频采样率
         # -ac 2: 双声道
@@ -575,8 +631,9 @@ class VideoDownloader:
         cmd = [
             'ffmpeg',
             '-y',  # 覆盖输出文件
-            '-ss', str(clip_start),  # 从第N秒开始
             '-i', input_path,  # 输入文件
+            '-filter_complex', filter_complex,
+            '-map', '[outa]',
             '-vn',  # 不要视频
             '-ar', '44100',  # 采样率
             '-ac', '2',  # 声道数
@@ -586,7 +643,10 @@ class VideoDownloader:
         ]
         
         print(f"[转换] FFmpeg剪辑并转MP3: {output_name}.mp3")
-        print(f"[转换] 跳过前 {clip_start} 秒")
+        print(
+            f"[转换] 前裁 {clip_start} 秒，后裁 {clip_end} 秒，"
+            f"纯净段结束: {clean_end_text}，重复拼接 x{max(int(repeat_count), 1)}"
+        )
         
         # 执行FFmpeg
         try:
@@ -620,6 +680,8 @@ class VideoDownloader:
         self,
         url_or_vid: str,
         skip_seconds: int = 5,  # 默认跳过前5秒广告
+        trim_end_seconds: int = 3,  # 默认剪掉末尾3秒广告
+        repeat_count: int = 2,  # 默认纯净音频重复拼接2遍
         progress_callback: Optional[Callable[[str, int], None]] = None,
         task_check: Optional[Callable[[], bool]] = None
     ) -> dict:
@@ -663,16 +725,24 @@ class VideoDownloader:
         # 生成输出文件名
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", info["name"])
         vid = get_vid(url_or_vid) or "unknown"
-        output_name = f"{safe_name}_{vid}_skip{skip_seconds}s"
+        output_name = (
+            f"{safe_name}_{vid}_skip{skip_seconds}s"
+            f"_tail{trim_end_seconds}s_x{repeat_count}"
+        )
         mp3_path = self.clip_and_convert(
             video_path, 
             output_name,
-            clip_start=skip_seconds
+            clip_start=skip_seconds,
+            clip_end=trim_end_seconds,
+            repeat_count=repeat_count,
         )
         
         result["mp3_path"] = mp3_path
         result["mp3_filename"] = os.path.basename(mp3_path)
         result["title"] = info["name"]
+        result["skip_seconds"] = skip_seconds
+        result["trim_end_seconds"] = trim_end_seconds
+        result["repeat_count"] = repeat_count
         
         if progress_callback:
             progress_callback("complete", 100)

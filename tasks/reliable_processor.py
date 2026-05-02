@@ -64,7 +64,7 @@ class RedisUnavailableError(RuntimeError):
 
 
 class DuplicateTaskError(RuntimeError):
-    """The same vid + skip_seconds already has a retained task."""
+    """The same vid + audio processing options already has a retained task."""
 
     def __init__(self, existing_task_id: str, status: str):
         super().__init__("重复任务")
@@ -126,11 +126,19 @@ def get_rq_redis_connection():
     )
 
 
-def build_dedupe_key(url: str, skip_seconds: int) -> tuple[str, str]:
+def build_dedupe_key(
+    url: str,
+    skip_seconds: int,
+    trim_end_seconds: int = 3,
+    repeat_count: int = 2,
+) -> tuple[str, str]:
     vid = get_vid(url)
     if vid is None:
         raise ValueError(f"无法从链接中识别 vid: {url}")
-    payload = f"{vid}:{int(skip_seconds)}"
+    payload = (
+        f"{vid}:{int(skip_seconds)}:"
+        f"{int(trim_end_seconds)}:{int(repeat_count)}"
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest(), vid
 
 
@@ -148,6 +156,8 @@ class Task:
     id: str
     url: str
     skip_seconds: int = 5
+    trim_end_seconds: int = 3
+    repeat_count: int = 2
     status: str = "pending"
     progress: int = 0
     message: str = ""
@@ -165,6 +175,8 @@ class Task:
             "id": self.id,
             "url": self.url,
             "skip_seconds": self.skip_seconds,
+            "trim_end_seconds": self.trim_end_seconds,
+            "repeat_count": self.repeat_count,
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
@@ -185,6 +197,8 @@ class Task:
             id=data["id"],
             url=data["url"],
             skip_seconds=data.get("skip_seconds", 5),
+            trim_end_seconds=data.get("trim_end_seconds", 0),
+            repeat_count=data.get("repeat_count", 1),
             status=data.get("status", "pending"),
             progress=data.get("progress", 0),
             message=data.get("message", ""),
@@ -336,7 +350,12 @@ class TaskStore:
         if task.dedupe_key:
             return task.dedupe_key
         try:
-            dedupe_key, _vid = build_dedupe_key(task.url, task.skip_seconds)
+            dedupe_key, _vid = build_dedupe_key(
+                task.url,
+                task.skip_seconds,
+                task.trim_end_seconds,
+                task.repeat_count,
+            )
             return dedupe_key
         except Exception:
             return ""
@@ -498,7 +517,13 @@ class TaskStore:
         return cleaned_count
 
 
-def process_download_task(task_id: str, url: str, skip_seconds: int):
+def process_download_task(
+    task_id: str,
+    url: str,
+    skip_seconds: int,
+    trim_end_seconds: int = 0,
+    repeat_count: int = 1,
+):
     """RQ worker entrypoint."""
     print(f"[Worker] 开始处理任务: {task_id}")
 
@@ -509,10 +534,22 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
     if not task:
         dedupe_key = ""
         try:
-            dedupe_key, _vid = build_dedupe_key(url, skip_seconds)
+            dedupe_key, _vid = build_dedupe_key(
+                url,
+                skip_seconds,
+                trim_end_seconds,
+                repeat_count,
+            )
         except Exception:
             pass
-        task = Task(id=task_id, url=url, skip_seconds=skip_seconds, dedupe_key=dedupe_key)
+        task = Task(
+            id=task_id,
+            url=url,
+            skip_seconds=skip_seconds,
+            trim_end_seconds=trim_end_seconds,
+            repeat_count=repeat_count,
+            dedupe_key=dedupe_key,
+        )
     elif not task.dedupe_key:
         task.dedupe_key = store._task_dedupe_key(task)
 
@@ -548,6 +585,8 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
         result = downloader.process_pipeline(
             url,
             skip_seconds=skip_seconds,
+            trim_end_seconds=trim_end_seconds,
+            repeat_count=repeat_count,
             progress_callback=progress_callback,
         )
 
@@ -604,9 +643,11 @@ def _enqueue_task(queue, task: Task):
         task.id,
         task.url,
         task.skip_seconds,
+        task.trim_end_seconds,
+        task.repeat_count,
         job_id=task.id,
         retry=Retry(max=2),
-        job_timeout=600,
+        job_timeout=900,
     )
     task.rq_job_id = job.id
     return job
@@ -726,12 +767,23 @@ class TaskProcessor:
             raise DuplicateTaskError(existing_task.id, existing_task.status)
         raise DuplicateTaskError(str(existing_task_id), "queued")
 
-    def submit(self, url: str, skip_seconds: int = 5) -> str:
+    def submit(
+        self,
+        url: str,
+        skip_seconds: int = 5,
+        trim_end_seconds: int = 3,
+        repeat_count: int = 2,
+    ) -> str:
         if not self.redis_available() or self.queue is None:
             raise RedisUnavailableError("Redis不可用，任务未提交")
 
         max_age_hours = get_retention_hours()
-        dedupe_key, _vid = build_dedupe_key(url, skip_seconds)
+        dedupe_key, _vid = build_dedupe_key(
+            url,
+            skip_seconds,
+            trim_end_seconds,
+            repeat_count,
+        )
         duplicate = self.store.find_duplicate(dedupe_key, max_age_hours=max_age_hours)
         if duplicate:
             raise DuplicateTaskError(duplicate.id, duplicate.status)
@@ -743,6 +795,8 @@ class TaskProcessor:
             id=task_id,
             url=url,
             skip_seconds=skip_seconds,
+            trim_end_seconds=trim_end_seconds,
+            repeat_count=repeat_count,
             status="queued",
             message="等待处理...",
             dedupe_key=dedupe_key,

@@ -6,11 +6,12 @@
 
 - **手机友好界面** - 简洁直观的操作体验
 - **一键提取** - 粘贴链接，后台队列自动处理
-- **自动去广告** - 默认剪掉前 5 秒片头
+- **自动去广告** - 默认剪掉前 5 秒、末尾 3 秒广告
+- **重复拼接** - 默认把裁剪后的纯净音频重复拼接为 x2 输出
 - **省流量** - 自动选择最低清晰度下载
 - **可靠队列** - Redis + RQ Worker 处理下载/转换任务
 - **状态恢复** - 任务状态 Redis + 本地 JSON 双写，Redis 异常时可降级查询
-- **重复提交保护** - 3 小时保留期内拒绝相同 `vid + skip_seconds`
+- **重复提交保护** - 3 小时保留期内拒绝相同视频和相同处理参数
 - **断点下载** - 支持 Range 分段下载、`.part` 续传和转换结果校验
 
 ## 技术栈
@@ -160,6 +161,7 @@ python app.py
   - Redis 不可用：HTTP `503`，`{"error": "Redis不可用，任务未提交"}`
   - 重复任务：HTTP `409`，`{"duplicate": true, "existing_task_id": "...", "status": "...", "error": "重复任务"}`
   - 成功提交：返回 `success`、`task_id`、`message`
+  - 默认音频处理参数：`skip_time=5`、`trim_end_time=3`、`repeat_concat_enabled=true`
 - `GET /api/status/<task_id>`
   - Redis 可用时优先读 Redis；Redis 不可用或缺失时回退本地 JSON
 - `POST /api/cleanup`

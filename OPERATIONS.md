@@ -11,6 +11,7 @@
 - Redis 队列：`rq:queue:tangdou`
 - 任务状态：Redis `tangdou:task:*` + 本地 `static/downloads/.tasks/*.json`
 - 去重键：Redis `tangdou:dedupe:*`
+- 默认音频处理：前裁 5 秒、后裁 3 秒、重复拼接 x2
 - 默认保留时间：3 小时，可用 `TANGDOU_RETENTION_HOURS` 覆盖
 
 ## 常用检查
@@ -100,7 +101,7 @@ cd /home/ryl/script/tangdou-web
 .venv/bin/python scripts/cleanup_redis.py --stale-dedupe --yes
 ```
 
-释放某个任务的去重占位，让同一 `vid + skip_seconds` 可以重新提交：
+释放某个任务的去重占位，让同一视频和相同处理参数可以重新提交：
 
 ```bash
 .venv/bin/python scripts/cleanup_redis.py --release-task 8588775f
@@ -149,7 +150,7 @@ redis-cli --scan --pattern 'tangdou:dedupe:*' | xargs -r redis-cli del
 
 ## 去重排查
 
-重复提交返回 HTTP `409` 时，说明同一 `vid + skip_seconds` 在保留期内已有处理中或已完成任务。排查步骤：
+重复提交返回 HTTP `409` 时，说明同一视频和相同处理参数在保留期内已有处理中或已完成任务。排查步骤：
 
 ```bash
 curl http://localhost:18080/api/tasks

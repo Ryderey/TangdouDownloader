@@ -27,14 +27,14 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 processor = get_processor()
 
 
-def parse_time(time_str: str) -> int:
+def parse_time(time_str: str, default: int = 5) -> int:
     """
     解析时间字符串为秒数
     支持格式: 秒、分:秒、时:分:秒
     :return: 秒数
     """
     if not time_str or not time_str.strip():
-        return 5  # 默认5秒
+        return default
     
     parts = re.split(r'[:\s\.,，]+', time_str.strip())
     parts = [p for p in parts if p.isdigit()]
@@ -49,7 +49,20 @@ def parse_time(time_str: str) -> int:
         # 时:分:秒
         return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
     
-    return 5  # 默认5秒
+    return default
+
+
+def parse_bool(value, default: bool = False) -> bool:
+    """解析前端复选框/JSON布尔值。"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "y"}
+    return default
 
 
 @app.route('/')
@@ -96,19 +109,33 @@ def submit_task():
     if not url:
         return jsonify({'error': '请输入视频链接'}), 400
     
-    # 解析跳过时间（默认5秒）
-    skip_seconds = 5
-    if data.get('skip_time'):
-        try:
-            skip_seconds = parse_time(data.get('skip_time'))
-        except:
-            skip_seconds = 5
-    
+    skip_start_enabled = parse_bool(data.get('skip_start_enabled'), default=True)
+    trim_end_enabled = parse_bool(data.get('trim_end_enabled'), default=True)
+    repeat_concat_enabled = parse_bool(data.get('repeat_concat_enabled'), default=True)
+
+    try:
+        skip_seconds = parse_time(data.get('skip_time'), default=5) if skip_start_enabled else 0
+    except Exception:
+        skip_seconds = 5 if skip_start_enabled else 0
+
+    try:
+        trim_end_seconds = parse_time(data.get('trim_end_time'), default=3) if trim_end_enabled else 0
+    except Exception:
+        trim_end_seconds = 3 if trim_end_enabled else 0
+
+    repeat_count = 2 if repeat_concat_enabled else 1
+
     # 限制范围
-    skip_seconds = max(0, min(skip_seconds, 300))  # 0-300秒
+    skip_seconds = max(0, min(skip_seconds, 300))
+    trim_end_seconds = max(0, min(trim_end_seconds, 300))
     
     try:
-        task_id = processor.submit(url, skip_seconds)
+        task_id = processor.submit(
+            url,
+            skip_seconds=skip_seconds,
+            trim_end_seconds=trim_end_seconds,
+            repeat_count=repeat_count,
+        )
         return jsonify({
             'success': True,
             'task_id': task_id,

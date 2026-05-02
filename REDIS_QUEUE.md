@@ -9,7 +9,7 @@
 - 任务状态 Redis + 本地 JSON 双写，本地路径为 `static/downloads/.tasks/`
 - Redis 不可用时 `/api/status/<task_id>` 回退读取本地 JSON
 - Redis 不可用时 `/api/submit` 返回 HTTP `503`，不创建新任务
-- 同一 `vid + skip_seconds` 在保留期内重复提交返回 HTTP `409`
+- 同一视频和相同处理参数在保留期内重复提交返回 HTTP `409`
 - 默认保留时间 3 小时，可用 `TANGDOU_RETENTION_HOURS` 覆盖
 - Worker 启动时自动扫描本地未完成任务并恢复入队
 
@@ -170,6 +170,8 @@ Redis 不可用时：
 ```json
 {"duplicate": true, "existing_task_id": "...", "status": "completed", "error": "重复任务"}
 ```
+
+默认音频处理参数为前裁 5 秒、后裁 3 秒、重复拼接 x2。去重键包含 `vid`、前裁秒数、后裁秒数和重复次数。
 
 ## 故障排查
 
