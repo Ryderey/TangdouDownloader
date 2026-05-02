@@ -1,0 +1,11 @@
+[Unit]
+Description=Tangdou MP3 Cleanup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ryl/script/tangdou-web
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PORT=6379"
+Environment="REDIS_DB=0"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/ryl/script/tangdou-web/.venv/bin/python /home/ryl/script/tangdou-web/scripts/cleanup.py
