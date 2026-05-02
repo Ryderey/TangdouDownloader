@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from typing import Callable, Optional, Tuple
 
-from .tangdou import VideoAPI, get_vid
+from .tangdou import VideoAPI
 from .headers import headers
 
 
@@ -601,17 +601,10 @@ class VideoDownloader:
         """
         output_path = os.path.join(self.download_dir, f"{output_name}.mp3")
         output_file = Path(output_path)
-        partial_output = output_file.with_suffix(f"{output_file.suffix}.part")
-        
-        # 如果文件已存在，先校验，避免半截MP3被当成成功结果
-        if output_file.exists():
-            try:
-                self.validate_mp3_file(output_file)
-                print(f"[转换] 文件已存在且校验通过: {output_name}.mp3")
-                return output_path
-            except Exception as error:
-                print(f"[转换] 已存在MP3校验失败，重新转换: {error}")
-                output_file.unlink(missing_ok=True)
+        partial_output = output_file.with_name(
+            f".{output_file.stem}.{os.getpid()}.{int(time.time() * 1000)}"
+            f"{output_file.suffix}.part"
+        )
 
         partial_output.unlink(missing_ok=True)
         duration = self.get_media_duration(input_path)
@@ -724,11 +717,8 @@ class VideoDownloader:
         
         # 生成输出文件名
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", info["name"])
-        vid = get_vid(url_or_vid) or "unknown"
-        output_name = (
-            f"{safe_name}_{vid}_skip{skip_seconds}s"
-            f"_tail{trim_end_seconds}s_x{repeat_count}"
-        )
+        repeat_suffix = f"_x{repeat_count}" if repeat_count > 1 else ""
+        output_name = f"{safe_name}{repeat_suffix}"
         mp3_path = self.clip_and_convert(
             video_path, 
             output_name,
