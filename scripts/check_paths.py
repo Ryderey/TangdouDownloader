@@ -26,8 +26,6 @@ def check_paths():
     possible_paths = [
         os.getcwd(),
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        '/home/ryl/script/tangdou-web',
-        '/home/ryl/tangdou-mp3',
     ]
     
     for path in possible_paths:

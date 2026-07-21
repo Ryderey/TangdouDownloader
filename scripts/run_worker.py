@@ -7,9 +7,12 @@ which uses the RQ Python API and avoids CLI option differences across versions.
 """
 import os
 import sys
+from pathlib import Path
 
 # 添加项目路径
-PROJECT_DIR = "/home/ryl/script/tangdou-web"
+PROJECT_DIR = str(
+    Path(os.environ.get("TANGDOU_BASE_DIR") or Path(__file__).resolve().parent.parent).resolve()
+)
 os.chdir(PROJECT_DIR)
 sys.path.insert(0, PROJECT_DIR)
 

@@ -6,6 +6,7 @@ task state to local JSON first. The local copy lets the web process answer
 status requests during Redis outages and lets workers restore unfinished tasks
 after queue loss or worker downtime.
 """
+from __future__ import annotations
 
 import hashlib
 import json
