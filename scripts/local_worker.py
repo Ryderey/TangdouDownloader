@@ -31,21 +31,21 @@ logger = logging.getLogger(__name__)
 def main() -> int:
     backend = os.environ.get("TANGDOU_QUEUE_BACKEND", "local").strip().lower()
     if backend not in {"local", "file", "no_redis", "no-redis"}:
-        logger.error("local_worker.py 只能用于本地队列后端，当前: %s", backend)
+        logger.error("local_worker.py is only for local queue backend, current: %s", backend)
         return 2
 
     try:
         from tasks.local_processor import LocalQueueWorker
 
         worker = LocalQueueWorker()
-        logger.info("项目目录: %s", PROJECT_DIR)
-        logger.info("本地队列 worker 启动: %s", worker.worker_id)
+        logger.info("Project dir: %s", PROJECT_DIR)
+        logger.info("Local queue worker started: %s", worker.worker_id)
         worker.run_forever()
     except KeyboardInterrupt:
-        logger.info("收到停止信号，worker 退出")
+        logger.info("Received stop signal, worker exiting")
         return 0
     except Exception as exc:
-        logger.error("worker 启动失败: %s", exc)
+        logger.error("Worker startup failed: %s", exc)
         import traceback
 
         traceback.print_exc()

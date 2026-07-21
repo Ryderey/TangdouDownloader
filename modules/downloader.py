@@ -126,7 +126,7 @@ class VideoDownloader:
         self.download_dir = download_dir
         self.api = VideoAPI()
         os.makedirs(download_dir, exist_ok=True)
-        print(f"[VideoDownloader] 下载目录: {self.download_dir}")
+        print("[VideoDownloader] Download dir: {}".format(self.download_dir))
         
         # 检查FFmpeg是否可用
         self._check_ffmpeg()
@@ -180,9 +180,9 @@ class VideoDownloader:
             subprocess.run([self.ffprobe_path, '-version'], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             raise RuntimeError(
-                "FFmpeg/ffprobe 未找到。\n"
-                "请将 ffmpeg.exe 和 ffprobe.exe 放入项目 bin/ 目录，"
-                "或安装 FFmpeg 并加入系统 PATH"
+                "FFmpeg/ffprobe not found. "
+                "Place ffmpeg.exe and ffprobe.exe in the project bin/ directory, "
+                "or install FFmpeg and add it to system PATH"
             )
 
     def _download_headers(self, url: str) -> dict:
@@ -206,7 +206,7 @@ class VideoDownloader:
             finally:
                 _close_response(response)
         except requests.RequestException as error:
-            print(f"[下载] HEAD探测失败，尝试Range探测: {error}")
+            print("[Download] HEAD probe failed, trying Range probe: {}".format(error))
 
         range_header = dict(header)
         range_header["Range"] = "bytes=0-0"
@@ -221,7 +221,7 @@ class VideoDownloader:
             finally:
                 _close_response(response)
         except requests.RequestException as error:
-            print(f"[下载] Range探测失败: {error}")
+            print("[Download] Range probe failed: {}".format(error))
 
         return None, False
 
@@ -260,19 +260,19 @@ class VideoDownloader:
             except (requests.RequestException, OSError, IncompleteDownloadError) as error:
                 last_error = error
                 print(
-                    f"[下载] 整文件下载重试 {attempt}/{max_attempts}, "
-                    f"已下载 {_path_size(partial_path)} bytes, 错误: {error}"
+                    "[Download] Full-file retry {}/{}, "
+                    "downloaded {} bytes, error: {}".format(attempt, max_attempts, _path_size(partial_path), error)
                 )
                 if attempt >= max_attempts:
                     raise RuntimeError(
-                        f"视频下载中断，已重试 {download_retries()} 次仍未完成"
+                        "Video download interrupted after {} retries".format(download_retries())
                     ) from error
                 time.sleep(min(2 ** (attempt - 1), 5))
             finally:
                 if response is not None:
                     _close_response(response)
 
-        raise RuntimeError(f"视频下载失败: {last_error}")
+        raise RuntimeError("Video download failed: {}".format(last_error))
 
     def _append_download_range(
         self,
@@ -362,24 +362,23 @@ class VideoDownloader:
                     last_error = error
                     downloaded_size = _path_size(partial_path)
                     print(
-                        f"[下载] 分段重试 {attempt}/{max_attempts}, "
-                        f"range={range_start}-{segment_end}, "
-                        f"进度={downloaded_size}/{total_size}, 错误: {error}"
+                        "[Download] Segment retry {}/{}, "
+                        "range={}-{}, progress={}/{}, error: {}".format(attempt, max_attempts, range_start, segment_end, downloaded_size, total_size, error)
                     )
                     if downloaded_size >= segment_end + 1:
                         break
                     if attempt >= max_attempts:
                         raise RuntimeError(
-                            "视频分段下载中断，"
-                            f"当前进度 {downloaded_size}/{total_size} 字节，"
-                            f"分段已重试 {download_retries()} 次仍未完成"
+                            "Segmented download interrupted, "
+                            "progress {}/{} bytes, "
+                            "retried {} times".format(downloaded_size, total_size, download_retries())
                         ) from error
                     attempt += 1
                     time.sleep(min(2 ** (attempt - 2), 5))
 
         if not partial_path.exists() or partial_path.stat().st_size != total_size:
             detail = f": {last_error}" if last_error is not None else ""
-            raise RuntimeError(f"视频下载结果大小异常{detail}")
+            raise RuntimeError("Video download size mismatch{}".format(detail))
 
         os.replace(partial_path, destination)
         return destination
@@ -405,7 +404,7 @@ class VideoDownloader:
                 progress_callback,
             )
 
-        print(f"[下载] 源站不支持Range或无法获取大小，降级整文件下载: total={total_size}")
+        print("[Download] Server does not support Range, fallback to full download: total={}".format(total_size))
         return self._download_without_ranges(
             url,
             destination,
@@ -435,16 +434,16 @@ class VideoDownloader:
                 check=False,
             )
         except FileNotFoundError as error:
-            raise RuntimeError(f"未找到 ffprobe，无法校验媒体文件: {error}") from error
+            raise RuntimeError("ffprobe not found, cannot validate media file: {}".format(error)) from error
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
-            raise RuntimeError(f"媒体文件校验失败: {stderr[-300:] or '未知错误'}")
+            raise RuntimeError("Media file validation failed: {}".format(stderr[-300:] or 'unknown error'))
 
         try:
             return json.loads(completed.stdout or "{}")
         except json.JSONDecodeError as error:
-            raise RuntimeError(f"媒体文件校验结果解析失败: {error}") from error
+            raise RuntimeError("Media probe result parse failed: {}".format(error)) from error
 
     def _extract_duration_seconds(self, probe_payload: dict[str, Any]) -> float:
         format_data = probe_payload.get("format")
@@ -467,28 +466,28 @@ class VideoDownloader:
     def validate_video_file(self, video_path: str | Path):
         path = Path(video_path)
         if not path.exists() or path.stat().st_size == 0:
-            raise RuntimeError("视频下载失败，未生成有效文件")
+            raise RuntimeError("Video download failed, no valid file generated")
 
         payload = self._probe_media_file(path)
         duration = self._extract_duration_seconds(payload)
         if duration <= 1:
-            raise RuntimeError(f"视频下载结果异常，时长过短: {duration:.2f}s")
+            raise RuntimeError("Video download abnormal, duration too short: {:.2f}s".format(duration))
         if not self._has_stream(payload, "video"):
-            raise RuntimeError("视频下载结果异常，未检测到视频流")
+            raise RuntimeError("Video download abnormal, no video stream detected")
         if not self._has_stream(payload, "audio"):
-            raise RuntimeError("视频下载结果异常，未检测到音频流")
+            raise RuntimeError("Video download abnormal, no audio stream detected")
 
     def validate_mp3_file(self, mp3_path: str | Path):
         path = Path(mp3_path)
         if not path.exists() or path.stat().st_size == 0:
-            raise RuntimeError("MP3 文件未生成或为空")
+            raise RuntimeError("MP3 file not generated or empty")
 
         payload = self._probe_media_file(path)
         duration = self._extract_duration_seconds(payload)
         if duration <= 1:
-            raise RuntimeError(f"MP3 文件时长异常，当前仅 {duration:.2f}s")
+            raise RuntimeError("MP3 file duration abnormal, only {:.2f}s".format(duration))
         if not self._has_stream(payload, "audio"):
-            raise RuntimeError("MP3 文件异常，未检测到音频流")
+            raise RuntimeError("MP3 file abnormal, no audio stream detected")
     
     def get_info(self, url_or_vid: str) -> dict:
         """获取视频信息"""
@@ -532,14 +531,14 @@ class VideoDownloader:
         if path.exists():
             try:
                 self.validate_video_file(path)
-                print(f"[下载] 文件已存在且校验通过: {filename}")
+                print("[Download] File exists and validation passed: {}".format(filename))
                 return filepath
             except Exception as error:
-                print(f"[下载] 已存在文件校验失败，重新下载: {error}")
+                print("[Download] Existing file validation failed, re-downloading: {}".format(error))
                 path.unlink(missing_ok=True)
         
-        print(f"[下载] 选择清晰度: {quality}")
-        print(f"[下载] 开始下载: {filename}")
+        print("[Download] Selected quality: {}".format(quality))
+        print("[Download] Starting download: {}".format(filename))
         
         last_reported_percent = 0
 
@@ -556,14 +555,14 @@ class VideoDownloader:
         self.validate_video_file(path)
         downloaded = path.stat().st_size
         
-        print(f"[下载] 完成: {filename} ({downloaded/1024/1024:.2f} MB)")
+        print("[Download] Complete: {} ({:.2f} MB)".format(filename, downloaded/1024/1024))
         return filepath
     
     def get_media_duration(self, media_path: str | Path) -> float:
         payload = self._probe_media_file(media_path)
         duration = self._extract_duration_seconds(payload)
         if duration <= 0:
-            raise RuntimeError("无法获取媒体时长，无法执行裁剪")
+            raise RuntimeError("Cannot get media duration, unable to trim")
         return duration
 
     def _build_audio_filter(
@@ -580,12 +579,12 @@ class VideoDownloader:
         clean_end = duration - clip_end if clip_end else None
         if clean_end is not None and clean_end <= clip_start + 1:
             raise RuntimeError(
-                "裁剪时间超过媒体长度，"
-                f"媒体时长 {duration:.2f}s，前裁 {clip_start}s，后裁 {clip_end}s"
+                "Trim exceeds media duration, "
+                "duration {:.2f}s, clip_start {}s, clip_end {}s".format(duration, clip_start, clip_end)
             )
         if clean_end is None and duration <= clip_start + 1:
             raise RuntimeError(
-                f"裁剪后音频过短，媒体时长 {duration:.2f}s，前裁 {clip_start}s"
+                "Audio too short after trim, duration {:.2f}s, clip_start {}s".format(duration, clip_start)
             )
 
         trim_args = [f"start={clip_start}"]
@@ -594,7 +593,7 @@ class VideoDownloader:
         trim_filter = f"atrim={':'.join(trim_args)},asetpts=PTS-STARTPTS"
 
         if repeat_count <= 1:
-            return f"[0:a]{trim_filter}[outa]", f"{clean_end:.2f}s" if clean_end else "结尾"
+            return "[0:a]{}[outa]".format(trim_filter), "{:.2f}s".format(clean_end) if clean_end else "end"
 
         split_labels = "".join(f"[a{index}]" for index in range(repeat_count))
         concat_inputs = "".join(f"[a{index}]" for index in range(repeat_count))
@@ -602,7 +601,7 @@ class VideoDownloader:
             f"[0:a]{trim_filter},asplit={repeat_count}{split_labels};"
             f"{concat_inputs}concat=n={repeat_count}:v=0:a=1[outa]"
         )
-        return filter_complex, f"{clean_end:.2f}s" if clean_end else "结尾"
+        return filter_complex, "{:.2f}s".format(clean_end) if clean_end else "end"
 
     def clip_and_convert(
         self, 
@@ -658,10 +657,10 @@ class VideoDownloader:
             str(partial_output)
         ]
         
-        print(f"[转换] FFmpeg剪辑并转MP3: {output_name}.mp3")
+        print("[Convert] FFmpeg clip and convert to MP3: {}.mp3".format(output_name))
         print(
-            f"[转换] 前裁 {clip_start} 秒，后裁 {clip_end} 秒，"
-            f"纯净段结束: {clean_end_text}，重复拼接 x{max(int(repeat_count), 1)}"
+            "[Convert] clip_start {}s, clip_end {}s, "
+            "clean_end: {}, repeat x{}".format(clip_start, clip_end, clean_end_text, max(int(repeat_count), 1))
         )
         
         # 执行FFmpeg
@@ -681,13 +680,13 @@ class VideoDownloader:
             if progress_callback:
                 progress_callback(100)
             
-            print(f"[转换] 完成: {output_name}.mp3")
+            print("[Convert] Complete: {}.mp3".format(output_name))
             return output_path
             
         except subprocess.CalledProcessError as e:
             partial_output.unlink(missing_ok=True)
-            print(f"[转换] FFmpeg错误: {e.stderr}")
-            raise RuntimeError(f"FFmpeg转换失败: {e.stderr}")
+            print("[Convert] FFmpeg error: {}".format(e.stderr))
+            raise RuntimeError("FFmpeg conversion failed: {}".format(e.stderr))
         except Exception:
             partial_output.unlink(missing_ok=True)
             raise
@@ -717,7 +716,7 @@ class VideoDownloader:
         info = self.get_info(url_or_vid)
         
         if task_check and not task_check():
-            raise RuntimeError("任务已取消")
+            raise RuntimeError("Task cancelled")
         
         # 2. 下载（选择最低清晰度）
         if progress_callback:
@@ -732,7 +731,7 @@ class VideoDownloader:
         result["video_path"] = video_path
         
         if task_check and not task_check():
-            raise RuntimeError("任务已取消")
+            raise RuntimeError("Task cancelled")
         
         # 3. 剪辑并转MP3
         if progress_callback:
@@ -771,6 +770,6 @@ class VideoDownloader:
         if not keep_video and os.path.exists(video_path):
             try:
                 os.remove(video_path)
-                print(f"[清理] 已删除临时视频: {os.path.basename(video_path)}")
+                print("[Cleanup] Removed temp video: {}".format(os.path.basename(video_path)))
             except Exception as e:
-                print(f"[清理] 删除失败: {e}")
+                print("[Cleanup] Delete failed: {}".format(e))

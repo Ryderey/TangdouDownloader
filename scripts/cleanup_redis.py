@@ -161,17 +161,17 @@ def print_key_list(label, keys):
     for key in keys[:50]:
         print(f"  {key}")
     if len(keys) > 50:
-        print(f"  ... 还有 {len(keys) - 50} 个 key 未显示")
+        print("  ... {} more keys not shown".format(len(keys) - 50))
 
 
 def delete_keys(conn, keys, yes):
     keys = sorted(set(keys))
     if not keys:
-        print("没有需要删除的 Redis key")
+        print("No Redis keys to delete")
         return 0
 
     if not yes:
-        print("未传 --yes，本次仅演练，不删除任何 Redis key")
+        print("--yes not passed, dry run only, no keys deleted")
         return 0
 
     deleted = 0
@@ -240,10 +240,10 @@ def main():
 
     if args.yes and args.rq and rq_queue_member_removed:
         conn.srem("rq:queues", args.queue)
-        print(f"已从 rq:queues 移除队列: {args.queue}")
+        print("Removed queue from rq:queues: {}".format(args.queue))
 
     if args.yes:
-        print(f"已删除 {deleted} 个 Redis key")
+        print("Deleted {} Redis keys".format(deleted))
     return 0
 
 

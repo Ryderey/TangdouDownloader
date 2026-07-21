@@ -29,7 +29,7 @@ except ImportError:
     Worker = None
     NoSuchJobError = Exception
     REDIS_AVAILABLE = False
-    print("[警告] Redis/RQ未安装，任务提交将不可用")
+    print("[WARNING] Redis/RQ not installed, task submission unavailable")
 
 from modules.downloader import VideoDownloader
 from modules.tangdou import get_vid
@@ -100,7 +100,7 @@ def redis_state_ttl_seconds() -> int:
 def get_redis_connection():
     """Redis connection for task status storage."""
     if not REDIS_AVAILABLE:
-        raise RuntimeError("Redis模块未安装")
+        raise RuntimeError("Redis module not installed")
     return redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -115,7 +115,7 @@ def get_redis_connection():
 def get_rq_redis_connection():
     """Redis connection for RQ, which requires raw byte responses."""
     if not REDIS_AVAILABLE:
-        raise RuntimeError("Redis模块未安装")
+        raise RuntimeError("Redis module not installed")
     return redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -135,7 +135,7 @@ def build_dedupe_key(
 ) -> tuple[str, str]:
     vid = get_vid(url)
     if vid is None:
-        raise ValueError(f"无法从链接中识别 vid: {url}")
+        raise ValueError("Cannot parse vid from URL: {}".format(url))
     payload = (
         f"{vid}:{int(skip_seconds)}:"
         f"{int(trim_end_seconds)}:{int(repeat_count)}"
@@ -236,7 +236,7 @@ class TaskStore:
             try:
                 self.redis = get_redis_connection()
             except Exception as exc:
-                print(f"[TaskStore] Redis连接初始化失败: {exc}")
+                print("[TaskStore] Redis connection init failed: {}".format(exc))
                 self.redis = None
 
         self.data_dir = _normalize_download_dir(download_dir)
@@ -273,7 +273,7 @@ class TaskStore:
         try:
             return Task.from_dict(json.loads(path.read_text(encoding="utf-8")))
         except Exception as exc:
-            print(f"[TaskStore] 读取本地任务失败 {path}: {exc}")
+            print("[TaskStore] Failed to load local task {}: {}".format(path, exc))
             return None
 
     def _iter_local_tasks(self):
@@ -283,7 +283,7 @@ class TaskStore:
             try:
                 yield Task.from_dict(json.loads(path.read_text(encoding="utf-8")))
             except Exception as exc:
-                print(f"[TaskStore] 跳过损坏任务文件 {path}: {exc}")
+                print("[TaskStore] Skipping corrupted task file {}: {}".format(path, exc))
 
     def save(self, task: Task):
         """Save locally first, then best-effort to Redis."""
@@ -299,7 +299,7 @@ class TaskStore:
             self.redis.sadd(self.TASK_IDS_KEY, task.id)
             self.redis.expire(self.TASK_IDS_KEY, redis_state_ttl_seconds())
         except Exception as exc:
-            print(f"[TaskStore] 写入Redis失败，已保留本地状态: {exc}")
+            print("[TaskStore] Redis write failed, local state preserved: {}".format(exc))
 
     def get(self, task_id: str) -> Optional[Task]:
         """Read Redis first, then local JSON."""
@@ -311,7 +311,7 @@ class TaskStore:
                         data = data.decode("utf-8", errors="ignore")
                     return Task.from_dict(json.loads(data))
             except Exception as exc:
-                print(f"[TaskStore] Redis读取失败，回退本地状态: {exc}")
+                print("[TaskStore] Redis read failed, falling back to local: {}".format(exc))
 
         return self._load_local(task_id)
 
@@ -327,7 +327,7 @@ class TaskStore:
                     if task:
                         tasks_by_id[task.id] = task
             except Exception as exc:
-                print(f"[TaskStore] 获取Redis任务列表失败，使用本地列表: {exc}")
+                print("[TaskStore] Failed to get Redis task list, using local: {}".format(exc))
 
         tasks = list(tasks_by_id.values())
         tasks.sort(key=lambda t: t.created_at, reverse=True)
@@ -337,7 +337,7 @@ class TaskStore:
         try:
             self._get_task_path(task_id).unlink(missing_ok=True)
         except Exception as exc:
-            print(f"[TaskStore] 删除本地任务失败 {task_id}: {exc}")
+            print("[TaskStore] Failed to delete local task {}: {}".format(task_id, exc))
 
         if self.redis is None:
             return
@@ -345,7 +345,7 @@ class TaskStore:
             self.redis.delete(self._get_task_key(task_id))
             self.redis.srem(self.TASK_IDS_KEY, task_id)
         except Exception as exc:
-            print(f"[TaskStore] 删除Redis任务失败 {task_id}: {exc}")
+            print("[TaskStore] Failed to delete Redis task {}: {}".format(task_id, exc))
 
     def _task_dedupe_key(self, task: Task) -> str:
         if task.dedupe_key:
@@ -385,7 +385,7 @@ class TaskStore:
                 task.id,
             )
         except Exception as exc:
-            print(f"[TaskStore] 刷新去重键失败: {exc}")
+            print("[TaskStore] Failed to refresh dedupe key: {}".format(exc))
 
     def release_dedupe(self, task: Task):
         dedupe_key = self._task_dedupe_key(task)
@@ -397,7 +397,7 @@ class TaskStore:
             if existing_task_id == task.id:
                 self.redis.delete(key)
         except Exception as exc:
-            print(f"[TaskStore] 释放去重键失败: {exc}")
+            print("[TaskStore] Failed to release dedupe key: {}".format(exc))
 
     def get_unfinished_tasks(self) -> list:
         return [
@@ -415,10 +415,10 @@ class TaskStore:
         try:
             if target.exists() and target.is_file():
                 target.unlink()
-                print(f"[Cleanup] 已删除文件: {target}")
+                print("[Cleanup] Deleted file: {}".format(target))
                 return 1
         except Exception as exc:
-            print(f"[Cleanup] 删除文件失败 {target}: {exc}")
+            print("[Cleanup] Failed to delete file {}: {}".format(target, exc))
         return 0
 
     def _cleanup_orphan_files(
@@ -450,9 +450,9 @@ class TaskStore:
                 if path.stat().st_mtime <= cutoff_time:
                     path.unlink()
                     cleaned_count += 1
-                    print(f"[Cleanup] 已删除过期文件: {path}")
+                    print("[Cleanup] Deleted expired file: {}".format(path))
             except Exception as exc:
-                print(f"[Cleanup] 删除过期文件失败 {path}: {exc}")
+                print("[Cleanup] Failed to delete expired file {}: {}".format(path, exc))
         return cleaned_count
 
     def _cleanup_stale_dedupe_keys(self):
@@ -466,7 +466,7 @@ class TaskStore:
                 if task is None or task.status == "failed":
                     self.redis.delete(key)
         except Exception as exc:
-            print(f"[Cleanup] 清理去重键失败: {exc}")
+            print("[Cleanup] Failed to clean dedupe keys: {}".format(exc))
 
     def cleanup_old(self, max_age_hours: Optional[int] = None, delete_mp3: bool = True) -> int:
         max_age_hours = get_retention_hours() if max_age_hours is None else max_age_hours
@@ -491,7 +491,7 @@ class TaskStore:
             self.release_dedupe(task)
             self.delete(task.id)
             cleaned_count += 1
-            print(f"[Cleanup] 已删除任务: {task.id}")
+            print("[Cleanup] Deleted task: {}".format(task.id))
 
         protected_paths = set()
         for task in self.get_all_tasks(limit=10000):
@@ -526,7 +526,7 @@ def process_download_task(
     repeat_count: int = 1,
 ):
     """RQ worker entrypoint."""
-    print(f"[Worker] 开始处理任务: {task_id}")
+    print("[Worker] Processing task: {}".format(task_id))
 
     store = TaskStore()
     downloader = VideoDownloader()
@@ -558,8 +558,8 @@ def process_download_task(
 
     try:
         task.status = "downloading"
-        task.message = "正在下载视频..."
-        task.add_log("info", "开始下载视频")
+        task.message = "Downloading video..."
+        task.add_log("info", "Start downloading video")
         store.save(task)
 
         last_update_percent = 0
@@ -598,13 +598,13 @@ def process_download_task(
         task.result = result
         task.status = "completed"
         task.progress = 100
-        task.message = "处理完成"
+        task.message = "Processing complete"
         task.completed_at = time.time()
-        task.add_log("success", "处理完成")
+        task.add_log("success", "Processing complete")
         store.save(task)
         store.refresh_dedupe(task)
 
-        print(f"[Worker] 任务完成: {task_id}")
+        print("[Worker] Task complete: {}".format(task_id))
         return result
 
     except Exception as exc:
@@ -616,13 +616,13 @@ def process_download_task(
 
         task.status = "failed"
         task.error = str(exc)
-        task.message = f"处理失败: {exc}"
+        task.message = "Processing failed: {}".format(exc)
         task.completed_at = time.time()
         task.add_log("error", str(exc))
         store.save(task)
         store.release_dedupe(task)
 
-        print(f"[Worker] 任务失败: {task_id}, 错误: {exc}")
+        print("[Worker] Task failed: {}, error: {}".format(task_id, exc))
         raise
 
 
@@ -657,7 +657,7 @@ def _enqueue_task(queue, task: Task):
 def recover_unfinished_tasks(queue=None, redis_conn=None) -> int:
     """Requeue unfinished local tasks when the worker starts."""
     if not REDIS_AVAILABLE:
-        print("[Recovery] Redis/RQ 未安装，跳过恢复")
+        print("[Recovery] Redis/RQ not installed, skipping recovery")
         return 0
 
     redis_conn = redis_conn or get_rq_redis_connection()
@@ -681,15 +681,15 @@ def recover_unfinished_tasks(queue=None, redis_conn=None) -> int:
             task.dedupe_key = store._task_dedupe_key(task)
         task.status = "queued"
         task.progress = max(task.progress, 0)
-        task.message = "等待恢复处理..."
-        task.add_log("info", "Worker启动时重新入队")
+        task.message = "Waiting for recovery..."
+        task.add_log("info", "Requeued on worker start")
         _enqueue_task(queue, task)
         store.save(task)
         store.refresh_dedupe(task)
         restored += 1
-        print(f"[Recovery] 已恢复任务: {task.id}")
+        print("[Recovery] Restored task: {}".format(task.id))
 
-    print(f"[Recovery] 恢复完成，重新入队 {restored} 个任务")
+    print("[Recovery] Recovery complete, requeued {} tasks".format(restored))
     return restored
 
 
@@ -709,7 +709,7 @@ class TaskProcessor:
             self.queue = Queue("tangdou", connection=self.rq_redis_conn)
 
         self.store = TaskStore(self.redis_conn, self.download_dir)
-        print("[TaskProcessor] 队列: tangdou")
+        print("[TaskProcessor] Queue: tangdou")
 
     @property
     def downloader(self):
@@ -729,9 +729,9 @@ class TaskProcessor:
 
     def _reserve_dedupe(self, dedupe_key: str, task_id: str, max_age_hours: int):
         if not self.redis_available():
-            raise RedisUnavailableError("Redis不可用，任务未提交")
+            raise RedisUnavailableError("Redis unavailable, task not submitted")
 
-        key = f"{DEDUPE_KEY_PREFIX}{dedupe_key}"
+        key = "{}{}".format(DEDUPE_KEY_PREFIX, dedupe_key)
         try:
             reserved = self.redis_conn.set(
                 key,
@@ -740,7 +740,7 @@ class TaskProcessor:
                 ex=retention_seconds(max_age_hours),
             )
         except Exception as exc:
-            raise RedisUnavailableError("Redis不可用，任务未提交") from exc
+            raise RedisUnavailableError("Redis unavailable, task not submitted") from exc
 
         if reserved:
             return
@@ -748,7 +748,7 @@ class TaskProcessor:
         try:
             existing_task_id = _decode_redis_value(self.redis_conn.get(key)) or ""
         except Exception as exc:
-            raise RedisUnavailableError("Redis不可用，任务未提交") from exc
+            raise RedisUnavailableError("Redis unavailable, task not submitted") from exc
 
         existing_task = self.store.get(str(existing_task_id)) if existing_task_id else None
         if existing_task and existing_task.status not in DUPLICATE_STATUSES:
@@ -763,7 +763,7 @@ class TaskProcessor:
                 if retry_reserved:
                     return
             except Exception as exc:
-                raise RedisUnavailableError("Redis不可用，任务未提交") from exc
+                raise RedisUnavailableError("Redis unavailable, task not submitted") from exc
         if existing_task:
             raise DuplicateTaskError(existing_task.id, existing_task.status)
         raise DuplicateTaskError(str(existing_task_id), "queued")
@@ -776,7 +776,7 @@ class TaskProcessor:
         repeat_count: int = 2,
     ) -> str:
         if not self.redis_available() or self.queue is None:
-            raise RedisUnavailableError("Redis不可用，任务未提交")
+            raise RedisUnavailableError("Redis unavailable, task not submitted")
 
         max_age_hours = get_retention_hours()
         dedupe_key, _vid = build_dedupe_key(
@@ -799,22 +799,22 @@ class TaskProcessor:
             trim_end_seconds=trim_end_seconds,
             repeat_count=repeat_count,
             status="queued",
-            message="等待处理...",
+            message="Waiting...",
             dedupe_key=dedupe_key,
         )
-        task.add_log("info", "任务已创建，加入队列")
+        task.add_log("info", "Task created, added to queue")
 
         try:
             self.store.save(task)
             job = _enqueue_task(self.queue, task)
             self.store.save(task)
-            print(f"[任务] 提交成功: {task_id}, RQ job: {job.id}")
+            print("[Task] Submitted: {}, RQ job: {}".format(task_id, job.id))
             return task_id
         except Exception as exc:
             self.store.release_dedupe(task)
             self.store.delete(task.id)
             if REDIS_AVAILABLE and isinstance(exc, redis.RedisError):
-                raise RedisUnavailableError("Redis不可用，任务未提交") from exc
+                raise RedisUnavailableError("Redis unavailable, task not submitted") from exc
             raise
 
     def get_task(self, task_id: str) -> Optional[Task]:
@@ -825,9 +825,9 @@ class TaskProcessor:
 
     def cleanup_old_files(self, max_age_hours: Optional[int] = None) -> int:
         max_age_hours = get_retention_hours() if max_age_hours is None else max_age_hours
-        print(f"[清理] 开始清理，保留时间: {max_age_hours} 小时")
+        print("[Cleanup] Starting cleanup, retention: {} hours".format(max_age_hours))
         count = self.store.cleanup_old(max_age_hours=max_age_hours, delete_mp3=True)
-        print(f"[清理] 完成，共清理 {count} 个文件")
+        print("[Cleanup] Complete, {} files cleaned".format(count))
         return count
 
     def get_queue_stats(self) -> dict:

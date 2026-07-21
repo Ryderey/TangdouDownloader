@@ -20,7 +20,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    print("[警告] Redis/RQ未安装，使用降级模式（仅适用于开发）")
+    print("[WARNING] Redis/RQ not installed, using degraded mode (dev only)")
 
 from modules.downloader import VideoDownloader
 
@@ -35,7 +35,7 @@ REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', None)
 def get_redis_connection():
     """获取Redis连接 - 用于任务状态存储（启用decode_responses）"""
     if not REDIS_AVAILABLE:
-        raise RuntimeError("Redis模块未安装")
+        raise RuntimeError("Redis module not installed")
     return redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -50,7 +50,7 @@ def get_redis_connection():
 def get_rq_redis_connection():
     """获取Redis连接 - 用于RQ队列（禁用decode_responses）"""
     if not REDIS_AVAILABLE:
-        raise RuntimeError("Redis模块未安装")
+        raise RuntimeError("Redis module not installed")
     return redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -151,7 +151,7 @@ class TaskStore:
             task_data = json.loads(data)
             return Task.from_dict(task_data)
         except Exception as e:
-            print(f"[TaskStore] 解析任务失败: {e}")
+            print("[TaskStore] Failed to parse task: {}".format(e))
             return None
     
     def get_all_tasks(self, limit: int = 100) -> list:
@@ -198,9 +198,9 @@ class TaskStore:
                         try:
                             os.remove(mp3_path)
                             cleaned_count += 1
-                            print(f"[Cleanup] 已删除MP3: {mp3_path}")
+                            print("[Cleanup] Deleted MP3: {}".format(mp3_path))
                         except Exception as e:
-                            print(f"[Cleanup] 删除MP3失败: {e}")
+                            print("[Cleanup] Failed to delete MP3: {}".format(e))
                     elif mp3_filename:
                         # 尝试从项目下载目录删除
                         _base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -210,15 +210,15 @@ class TaskStore:
                                 try:
                                     os.remove(full_path)
                                     cleaned_count += 1
-                                    print(f"[Cleanup] 已删除MP3: {full_path}")
+                                    print("[Cleanup] Deleted MP3: {}".format(full_path))
                                     break
                                 except Exception as e:
-                                    print(f"[Cleanup] 删除MP3失败: {e}")
+                                    print("[Cleanup] Failed to delete MP3: {}".format(e))
                 
                 # 删除任务记录
                 self.delete(task.id)
                 cleaned_count += 1
-                print(f"[Cleanup] 已删除任务: {task.id}")
+                print("[Cleanup] Deleted task: {}".format(task.id))
         
         return cleaned_count
 
@@ -230,7 +230,7 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
     RQ工作进程执行的实际任务
     这个函数在Worker进程中运行
     """
-    print(f"[Worker] 开始处理任务: {task_id}")
+    print("[Worker] Processing task: {}".format(task_id))
     
     # 创建独立的存储连接（Worker进程中）
     store = TaskStore()
@@ -246,8 +246,8 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
     try:
         # 更新状态为处理中
         task.status = "downloading"
-        task.message = "正在下载视频..."
-        task.add_log('info', '开始下载视频')
+        task.message = "Downloading video..."
+        task.add_log('info', 'Start downloading video')
         store.save(task)
         
         # 优化：减少进度更新频率
@@ -292,12 +292,12 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
         task.result = result
         task.status = "completed"
         task.progress = 100
-        task.message = "处理完成"
+        task.message = "Processing complete"
         task.completed_at = time.time()
-        task.add_log('success', '处理完成')
+        task.add_log('success', 'Processing complete')
         store.save(task)
         
-        print(f"[Worker] 任务完成: {task_id}")
+        print("[Worker] Task complete: {}".format(task_id))
         return result
         
     except Exception as e:
@@ -311,22 +311,22 @@ def process_download_task(task_id: str, url: str, skip_seconds: int):
         # 更新失败状态
         task.status = "failed"
         task.error = str(e)
-        task.message = f"处理失败: {e}"
+        task.message = "Processing failed: {}".format(e)
         task.completed_at = time.time()
         task.add_log('error', str(e))
         store.save(task)
         
-        print(f"[Worker] 任务失败: {task_id}, 错误: {e}")
+        print("[Worker] Task failed: {}, error: {}".format(task_id, e))
         raise
 
 
 def _get_status_message(stage: str) -> str:
     """获取状态描述"""
     messages = {
-        "info": "获取视频信息...",
-        "download": "正在下载视频...",
-        "convert": "正在转换为MP3...",
-        "complete": "处理完成"
+        "info": "Fetching video info...",
+        "download": "Downloading video...",
+        "convert": "Converting to MP3...",
+        "complete": "Processing complete"
     }
     return messages.get(stage, stage)
 
@@ -347,8 +347,8 @@ class TaskProcessor:
         # 检查Redis是否可用
         if not REDIS_AVAILABLE:
             raise RuntimeError(
-                "Redis/RQ模块未安装。请在生产环境安装: pip install redis rq\n"
-                "或使用内存模式: from tasks.processor_memory import get_processor"
+                "Redis/RQ module not installed. Install for production: pip install redis rq\n"
+                "Or use memory mode: from tasks.processor_memory import get_processor"
             )
         
         # 连接到Redis用于任务状态存储
@@ -358,8 +358,8 @@ class TaskProcessor:
         self.rq_redis_conn = get_rq_redis_connection()
         self.queue = Queue('tangdou', connection=self.rq_redis_conn)
         
-        print(f"[TaskProcessor] 已连接到Redis: {REDIS_HOST}:{REDIS_PORT}")
-        print(f"[TaskProcessor] 队列: tangdou")
+        print("[TaskProcessor] Connected to Redis: {}:{}".format(REDIS_HOST, REDIS_PORT))
+        print("[TaskProcessor] Queue: tangdou")
     
     @property
     def downloader(self):
@@ -378,9 +378,9 @@ class TaskProcessor:
             url=url,
             skip_seconds=skip_seconds,
             status="queued",
-            message="等待处理..."
+            message="Waiting..."
         )
-        task.add_log('info', '任务已创建，加入队列')
+        task.add_log('info', 'Task created, added to queue')
         self.store.save(task)
         
         # 提交到RQ队列
@@ -394,7 +394,7 @@ class TaskProcessor:
             job_timeout=600,      # 10分钟超时
         )
         
-        print(f"[任务] 提交成功: {task_id}, RQ job: {job.id}")
+        print("[Task] Submitted: {}, RQ job: {}".format(task_id, job.id))
         return task_id
     
     def get_task(self, task_id: str) -> Optional[Task]:
@@ -407,9 +407,9 @@ class TaskProcessor:
     
     def cleanup_old_files(self, max_age_hours: int = 24) -> int:
         """手动触发清理"""
-        print(f"[清理] 开始清理，保留时间: {max_age_hours} 小时")
+        print("[Cleanup] Starting cleanup, retention: {} hours".format(max_age_hours))
         count = self.store.cleanup_old(max_age_hours=max_age_hours, delete_mp3=True)
-        print(f"[清理] 完成，共清理 {count} 个文件")
+        print("[Cleanup] Complete, {} files cleaned".format(count))
         return count
     
     def get_queue_stats(self) -> dict:
