@@ -12,3 +12,17 @@ static/downloads/*
 
 .env
 .DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+*.bat.bak
+
+# FFmpeg 二进制文件（不纳入版本控制）
+bin/*.exe
+bin/*.dll
+bin/*.pdb
+
+# 本地队列数据
+static/downloads/.queue/
+static/downloads/.tasks/

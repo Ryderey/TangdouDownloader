@@ -2,6 +2,7 @@
 内存模式任务处理器 - 用于本地开发（无Redis）
 注意：此模式不支持多进程，仅用于开发测试
 """
+from __future__ import annotations
 
 import os
 import time

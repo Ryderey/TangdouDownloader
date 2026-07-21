@@ -2,6 +2,7 @@
 糖豆视频下载 Web 应用
 Flask + FFmpeg + Tailscale
 """
+from __future__ import annotations
 
 import os
 import sys
@@ -301,5 +302,18 @@ def internal_error(e):
 
 
 if __name__ == '__main__':
-    # 开发模式
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # 开发模式: python app.py
+    # 生产模式: python wsgi.py (使用 waitress)
+    import argparse
+    parser = argparse.ArgumentParser(description='糖豆MP3提取器')
+    parser.add_argument('--prod', action='store_true', help='使用waitress生产模式启动')
+    parser.add_argument('--port', type=int, default=5000, help='端口号')
+    args = parser.parse_args()
+
+    if args.prod:
+        from waitress import serve
+        print("[生产模式] http://0.0.0.0:{}".format(args.port))
+        serve(app, host='0.0.0.0', port=args.port, threads=4)
+    else:
+        print("[开发模式] http://0.0.0.0:{}".format(args.port))
+        app.run(host='0.0.0.0', port=args.port, debug=True)

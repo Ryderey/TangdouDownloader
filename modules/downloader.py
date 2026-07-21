@@ -2,11 +2,13 @@
 视频下载器 - 使用FFmpeg进行高效处理
 优化策略：下载低清视频 + 剪前后广告 + 可重复拼接 + 转MP3
 """
+from __future__ import annotations
 
 import os
 import re
 import json
 import subprocess
+import sys
 import requests
 import time
 from pathlib import Path
@@ -135,32 +137,53 @@ class VideoDownloader:
         env_dir = os.environ.get('TANGDOU_BASE_DIR')
         if env_dir and os.path.exists(os.path.join(env_dir, 'app.py')):
             return env_dir
-        
+            
         # 方法2: 从当前文件位置推导（modules/downloader.py -> 项目根目录）
         file_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if os.path.exists(os.path.join(file_dir, 'app.py')):
             return file_dir
-        
+            
         # 方法3: 从工作目录获取
         cwd = os.getcwd()
         if os.path.exists(os.path.join(cwd, 'app.py')):
             return cwd
-        
-        # 方法4: 尝试常见路径
-        for path in ['/home/ryl/script/tangdou-web', '/home/ryl/tangdou-mp3']:
-            if os.path.exists(os.path.join(path, 'app.py')):
-                return path
-        
-        # 兜底：使用当前文件所在目录的上级
+            
+        # 兖底：使用当前文件所在目录的上级
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
+    def _find_ffmpeg(self) -> str:
+        """查找 ffmpeg 可执行文件路径（优先项目 bin/ 目录）"""
+        base_dir = self._get_base_dir()
+        bin_dir = Path(base_dir) / "bin"
+        exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+        bundled = bin_dir / exe_name
+        if bundled.exists():
+            return str(bundled)
+        return "ffmpeg"  # fallback to PATH
+
+    def _find_ffprobe(self) -> str:
+        """查找 ffprobe 可执行文件路径（优先项目 bin/ 目录）"""
+        base_dir = self._get_base_dir()
+        bin_dir = Path(base_dir) / "bin"
+        exe_name = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
+        bundled = bin_dir / exe_name
+        if bundled.exists():
+            return str(bundled)
+        return "ffprobe"  # fallback to PATH
+
     def _check_ffmpeg(self):
-        """检查FFmpeg是否已安装"""
+        """检查FFmpeg是否可用"""
+        self.ffmpeg_path = self._find_ffmpeg()
+        self.ffprobe_path = self._find_ffprobe()
         try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
-            subprocess.run(['ffprobe', '-version'], capture_output=True, check=True)
+            subprocess.run([self.ffmpeg_path, '-version'], capture_output=True, check=True)
+            subprocess.run([self.ffprobe_path, '-version'], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            raise RuntimeError("FFmpeg/ffprobe 未安装，请先安装 FFmpeg")
+            raise RuntimeError(
+                "FFmpeg/ffprobe 未找到。\n"
+                "请将 ffmpeg.exe 和 ffprobe.exe 放入项目 bin/ 目录，"
+                "或安装 FFmpeg 并加入系统 PATH"
+            )
 
     def _download_headers(self, url: str) -> dict:
         header = headers(url).buildHeader()
@@ -393,7 +416,7 @@ class VideoDownloader:
 
     def _probe_media_file(self, media_path: str | Path) -> dict[str, Any]:
         command = [
-            "ffprobe",
+            self.ffprobe_path,
             "-v",
             "error",
             "-print_format",
@@ -622,7 +645,7 @@ class VideoDownloader:
         # -ac 2: 双声道
         # -b:a 192k: 比特率
         cmd = [
-            'ffmpeg',
+            self.ffmpeg_path,
             '-y',  # 覆盖输出文件
             '-i', input_path,  # 输入文件
             '-filter_complex', filter_complex,

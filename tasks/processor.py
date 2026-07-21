@@ -2,6 +2,7 @@
 任务处理器 - 使用Redis Queue (RQ) 实现
 支持多进程安全的任务队列
 """
+from __future__ import annotations
 
 import os
 import time
@@ -201,8 +202,9 @@ class TaskStore:
                         except Exception as e:
                             print(f"[Cleanup] 删除MP3失败: {e}")
                     elif mp3_filename:
-                        # 尝试从常见路径删除
-                        for base_dir in ['static/downloads', '/home/ryl/script/tangdou-web/static/downloads']:
+                        # 尝试从项目下载目录删除
+                        _base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        for base_dir in ['static/downloads', os.path.join(_base, 'static/downloads')]:
                             full_path = os.path.join(base_dir, mp3_filename)
                             if os.path.exists(full_path):
                                 try:
@@ -431,6 +433,10 @@ def get_processor() -> TaskProcessor:
     return _processor
 
 
-# The reliable implementation below keeps this module path stable for existing
-# RQ jobs that were enqueued as tasks.processor.process_download_task.
-from tasks.reliable_processor import *  # noqa: F401,F403,E402
+# Win7 分支默认使用本地文件队列（无需 Redis）
+# 设置 TANGDOU_QUEUE_BACKEND=redis 可切换回 Redis 模式
+_BACKEND = os.environ.get("TANGDOU_QUEUE_BACKEND", "local").strip().lower()
+if _BACKEND in {"redis", "rq"}:
+    from tasks.reliable_processor import *  # noqa: F401,F403,E402
+else:
+    from tasks.local_processor import *  # noqa: F401,F403,E402
