@@ -1,5 +1,5 @@
-# Win7 兼容依赖 (Python 3.8)
-flask>=2.3.0,<3.0
+# Win10 dependencies (Python 3.10+, managed by uv)
+flask>=2.3.0
 waitress>=2.1.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0

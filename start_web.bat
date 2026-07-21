@@ -1,18 +1,18 @@
 @echo off
 chcp 65001 >nul 2>&1
-title 糖豆MP3提取器 - Web服务
+title Tangdou MP3 Extractor - Web
 
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [错误] 虚拟环境不存在，请先运行 setup.bat
+    echo [ERROR] Virtual environment not found, run setup.bat first
     pause
     exit /b 1
 )
 
-echo [启动] 糖豆MP3提取器 Web服务 (waitress)
-echo [地址] http://localhost:18080
-echo [提示] 按 Ctrl+C 停止服务
+echo [START] Tangdou MP3 Extractor Web (waitress)
+echo [URL]   http://localhost:18080
+echo [STOP]  Press Ctrl+C to stop
 echo.
 
 .venv\Scripts\python.exe wsgi.py
