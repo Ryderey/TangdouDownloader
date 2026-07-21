@@ -16,16 +16,16 @@ from tasks.processor import TaskStore, TaskProcessor
 
 def test_cleanup():
     print("=" * 60)
-    print("MP3自动清理功能测试")
+    print("MP3 auto-cleanup test")
     print("=" * 60)
     
     # 初始化存储
     store = TaskStore()
-    print(f"\n[1] 任务存储目录: {store.tasks_dir}")
-    print(f"[1] 下载目录: {store.data_dir}")
+    print("\n[1] Task store dir: {}".format(store.tasks_dir))
+    print("[1] Download dir: {}".format(store.data_dir))
     
     # 创建测试文件
-    print("\n[2] 创建测试任务和MP3文件...")
+    print("\n[2] Creating test task and MP3 file...")
     
     # 创建一个模拟的已完成任务
     test_task_id = "test_cleanup_001"
@@ -35,7 +35,7 @@ def test_cleanup():
     # 创建模拟MP3文件
     with open(test_mp3_path, 'w') as f:
         f.write("dummy mp3 content")
-    print(f"[2] 创建测试MP3: {test_mp3_path}")
+    print("[2] Created test MP3: {}".format(test_mp3_path))
     
     # 创建任务JSON文件（模拟1小时前的任务）
     task_data = {
@@ -44,7 +44,7 @@ def test_cleanup():
         'skip_seconds': 5,
         'status': 'completed',
         'progress': 100,
-        'message': '处理完成',
+        'message': 'Processing complete',
         'result': {
             'mp3_path': test_mp3_path,
             'mp3_filename': test_mp3_filename,
@@ -59,29 +59,29 @@ def test_cleanup():
     task_file = os.path.join(store.tasks_dir, f"{test_task_id}.json")
     with open(task_file, 'w', encoding='utf-8') as f:
         json.dump(task_data, f, ensure_ascii=False, indent=2)
-    print(f"[2] 创建任务文件: {task_file}")
+    print("[2] Created task file: {}".format(task_file))
     
     # 修改文件时间为2小时前
     os.utime(task_file, (time.time() - 7200, time.time() - 7200))
     os.utime(test_mp3_path, (time.time() - 7000, time.time() - 7000))
     
     # 测试清理（保留1小时，应该清理掉2小时前的文件）
-    print("\n[3] 执行清理（保留1小时）...")
+    print("\n[3] Running cleanup (retain 1 hour)...")
     cleaned = store.cleanup_old(max_age_hours=1, delete_mp3=True)
-    print(f"[3] 清理完成，共清理 {cleaned} 个文件")
+    print("[3] Cleanup complete, {} files cleaned".format(cleaned))
     
     # 验证结果
-    print("\n[4] 验证清理结果...")
+    print("\n[4] Verifying cleanup result...")
     task_exists = os.path.exists(task_file)
     mp3_exists = os.path.exists(test_mp3_path)
     
     if not task_exists and not mp3_exists:
-        print("[4] OK - 任务文件和MP3文件都已清理")
+        print("[4] OK - Task file and MP3 file both cleaned")
     else:
-        print(f"[4] FAIL - 任务文件存在: {task_exists}, MP3文件存在: {mp3_exists}")
+        print("[4] FAIL - Task exists: {}, MP3 exists: {}".format(task_exists, mp3_exists))
     
     # 测试不删除MP3的情况
-    print("\n[5] 测试不删除MP3模式...")
+    print("\n[5] Testing no-delete-MP3 mode...")
     
     # 重新创建文件
     with open(test_mp3_path, 'w') as f:
@@ -91,20 +91,20 @@ def test_cleanup():
     os.utime(task_file, (time.time() - 7200, time.time() - 7200))
     
     cleaned = store.cleanup_old(max_age_hours=1, delete_mp3=False)
-    print(f"[5] 清理完成（仅JSON），共清理 {cleaned} 个文件")
+    print("[5] Cleanup complete (JSON only), {} files cleaned".format(cleaned))
     
     task_exists = os.path.exists(task_file)
     mp3_exists = os.path.exists(test_mp3_path)
     
     if not task_exists and mp3_exists:
-        print("[5] OK - 任务文件已清理，MP3文件保留")
+        print("[5] OK - Task file cleaned, MP3 file retained")
         # 清理测试MP3
         os.remove(test_mp3_path)
     else:
-        print(f"[5] FAIL - 任务文件存在: {task_exists}, MP3文件存在: {mp3_exists}")
+        print("[5] FAIL - Task exists: {}, MP3 exists: {}".format(task_exists, mp3_exists))
     
     print("\n" + "=" * 60)
-    print("测试完成")
+    print("Test complete")
     print("=" * 60)
 
 if __name__ == "__main__":

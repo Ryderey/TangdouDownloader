@@ -30,28 +30,28 @@ def main():
 
         redis_conn = get_rq_redis_connection()
         redis_conn.ping()
-        logger.info("已连接到 Redis")
+        logger.info("Connected to Redis")
 
         queue = Queue("tangdou", connection=redis_conn)
-        logger.info("队列: tangdou")
+        logger.info("Queue: tangdou")
 
         restored = recover_unfinished_tasks(queue=queue, redis_conn=redis_conn)
-        logger.info("启动恢复完成，重新入队 %s 个任务", restored)
+        logger.info("Startup recovery complete, requeued %s tasks", restored)
 
         worker = Worker(
             [queue],
             connection=redis_conn,
             name=f"tangdou-worker-{os.uname().nodename}",
         )
-        logger.info("启动 Worker...")
+        logger.info("Starting Worker...")
         worker.work(with_scheduler=True, logging_level="INFO")
 
     except ImportError as exc:
-        logger.error("导入失败: %s", exc)
-        logger.error("请确保已安装 redis 和 rq: uv pip install redis rq")
+        logger.error("Import failed: %s", exc)
+        logger.error("Make sure redis and rq are installed: pip install redis rq")
         return 1
     except Exception as exc:
-        logger.error("错误: %s", exc)
+        logger.error("Error: %s", exc)
         import traceback
 
         traceback.print_exc()

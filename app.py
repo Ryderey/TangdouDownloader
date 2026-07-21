@@ -77,7 +77,7 @@ def get_video_info():
     """获取视频信息（用于预览）"""
     url = request.json.get('url', '').strip()
     if not url:
-        return jsonify({'error': '请输入视频链接'}), 400
+        return jsonify({'error': 'Please enter a video URL'}), 400
     
     try:
         from modules.tangdou import VideoAPI
@@ -108,7 +108,7 @@ def submit_task():
     url = data.get('url', '').strip()
     
     if not url:
-        return jsonify({'error': '请输入视频链接'}), 400
+        return jsonify({'error': 'Please enter a video URL'}), 400
     
     skip_start_enabled = parse_bool(data.get('skip_start_enabled'), default=True)
     trim_end_enabled = parse_bool(data.get('trim_end_enabled'), default=True)
@@ -140,16 +140,16 @@ def submit_task():
         return jsonify({
             'success': True,
             'task_id': task_id,
-            'message': '任务已提交'
+            'message': 'Task submitted'
         })
     except RedisUnavailableError:
-        return jsonify({'error': 'Redis不可用，任务未提交'}), 503
+        return jsonify({'error': 'Redis unavailable, task not submitted'}), 503
     except DuplicateTaskError as e:
         return jsonify({
             'duplicate': True,
             'existing_task_id': e.existing_task_id,
             'status': e.status,
-            'error': '重复任务'
+            'error': 'Duplicate task'
         }), 409
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -162,7 +162,7 @@ def task_status(task_id):
     """查询任务状态"""
     task = processor.get_task(task_id)
     if not task:
-        return jsonify({'error': '任务不存在'}), 404
+        return jsonify({'error': 'Task not found'}), 404
     
     return jsonify({
         'success': True,
@@ -175,14 +175,14 @@ def download_file(filename):
     """下载文件"""
     # 安全检查：防止目录遍历
     if '..' in filename or filename.startswith('/'):
-        return jsonify({'error': '非法文件名'}), 400
+        return jsonify({'error': 'Invalid filename'}), 400
     
     directory = os.path.join(app.root_path, 'static/downloads')
     
     # 检查文件是否存在
     filepath = os.path.join(directory, filename)
     if not os.path.exists(filepath):
-        return jsonify({'error': '文件不存在或已过期'}), 404
+        return jsonify({'error': 'File not found or expired'}), 404
     
     return send_from_directory(
         directory, 
@@ -213,9 +213,9 @@ def cleanup():
         count = processor.cleanup_old_files(max_age_hours=max_age_hours)
         
         if max_age_hours == 0:
-            message = f'已清理所有历史文件，共 {count} 个'
+            message = 'Cleaned all history files, {} removed'.format(count)
         else:
-            message = f'已清理 {max_age_hours} 小时前的文件，共 {count} 个'
+            message = 'Cleaned files older than {}h, {} removed'.format(max_age_hours, count)
         
         return jsonify({
             'success': True, 
@@ -291,29 +291,29 @@ def queue_stats():
 def not_found(e):
     """404错误处理"""
     if request.path.startswith('/api/'):
-        return jsonify({'error': '接口不存在'}), 404
+        return jsonify({'error': 'API not found'}), 404
     return render_template('index.html'), 404
 
 
 @app.errorhandler(500)
 def internal_error(e):
     """500错误处理"""
-    return jsonify({'error': '服务器内部错误'}), 500
+    return jsonify({'error': 'Internal server error'}), 500
 
 
 if __name__ == '__main__':
     # 开发模式: python app.py
     # 生产模式: python wsgi.py (使用 waitress)
     import argparse
-    parser = argparse.ArgumentParser(description='糖豆MP3提取器')
-    parser.add_argument('--prod', action='store_true', help='使用waitress生产模式启动')
-    parser.add_argument('--port', type=int, default=5000, help='端口号')
+    parser = argparse.ArgumentParser(description='Tangdou MP3 Extractor')
+    parser.add_argument('--prod', action='store_true', help='Start with waitress production mode')
+    parser.add_argument('--port', type=int, default=5000, help='Port number')
     args = parser.parse_args()
 
     if args.prod:
         from waitress import serve
-        print("[生产模式] http://0.0.0.0:{}".format(args.port))
+        print("[Production] http://0.0.0.0:{}".format(args.port))
         serve(app, host='0.0.0.0', port=args.port, threads=4)
     else:
-        print("[开发模式] http://0.0.0.0:{}".format(args.port))
+        print("[Development] http://0.0.0.0:{}".format(args.port))
         app.run(host='0.0.0.0', port=args.port, debug=True)

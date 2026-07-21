@@ -50,7 +50,7 @@ class DuplicateTaskError(RuntimeError):
     """The same vid + audio processing options already has a retained task."""
 
     def __init__(self, existing_task_id: str, status: str):
-        super().__init__("重复任务")
+        super().__init__("Duplicate task")
         self.existing_task_id = existing_task_id
         self.status = status
 
@@ -169,7 +169,7 @@ def build_dedupe_key(
 ) -> Tuple[str, str]:
     vid = get_vid(url)
     if vid is None:
-        raise ValueError("无法从链接中识别 vid: {}".format(url))
+        raise ValueError("Cannot parse vid from URL: {}".format(url))
     payload = "{}:{}:{}:{}".format(
         vid, int(skip_seconds), int(trim_end_seconds), int(repeat_count)
     )
@@ -290,7 +290,7 @@ class TaskStore:
             self.cache.set(task_id, task)
             return task
         except Exception as exc:
-            print("[TaskStore] 读取本地任务失败 {}: {}".format(path, exc))
+            print("[TaskStore] Failed to load local task {}: {}".format(path, exc))
             return None
 
     def _iter_local_tasks(self):
@@ -300,7 +300,7 @@ class TaskStore:
             try:
                 yield Task.from_dict(json.loads(path.read_text(encoding="utf-8")))
             except Exception as exc:
-                print("[TaskStore] 跳过损坏任务文件 {}: {}".format(path, exc))
+                print("[TaskStore] Skipping corrupted task file {}: {}".format(path, exc))
 
     def save(self, task: Task):
         self._save_local(task)
@@ -320,7 +320,7 @@ class TaskStore:
                 task_path.unlink()
             self.cache.delete(task_id)
         except Exception as exc:
-            print("[TaskStore] 删除本地任务失败 {}: {}".format(task_id, exc))
+            print("[TaskStore] Failed to delete local task {}: {}".format(task_id, exc))
 
     def _task_dedupe_key(self, task: Task) -> str:
         if task.dedupe_key:
@@ -371,10 +371,10 @@ class TaskStore:
         try:
             if target.exists() and target.is_file():
                 target.unlink()
-                print("[Cleanup] 已删除文件: {}".format(target))
+                print("[Cleanup] Deleted file: {}".format(target))
                 return 1
         except Exception as exc:
-            print("[Cleanup] 删除文件失败 {}: {}".format(target, exc))
+            print("[Cleanup] Failed to delete file {}: {}".format(target, exc))
         return 0
 
     def _cleanup_orphan_files(
@@ -406,9 +406,9 @@ class TaskStore:
                 if path.stat().st_mtime <= cutoff_time:
                     path.unlink()
                     cleaned_count += 1
-                    print("[Cleanup] 已删除过期文件: {}".format(path))
+                    print("[Cleanup] Deleted expired file: {}".format(path))
             except Exception as exc:
-                print("[Cleanup] 删除过期文件失败 {}: {}".format(path, exc))
+                print("[Cleanup] Failed to delete expired file {}: {}".format(path, exc))
         return cleaned_count
 
     def cleanup_old(self, max_age_hours: Optional[int] = None, delete_mp3: bool = True) -> int:
@@ -433,7 +433,7 @@ class TaskStore:
 
             self.delete(task.id)
             cleaned_count += 1
-            print("[Cleanup] 已删除任务: {}".format(task.id))
+            print("[Cleanup] Deleted task: {}".format(task.id))
 
         protected_paths: Set[Path] = set()
         for task in self.get_all_tasks(limit=10000):
@@ -506,7 +506,7 @@ class LocalFileQueue:
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            print("[LocalQueue] 读取队列文件失败 {}: {}".format(path, exc))
+            print("[LocalQueue] Failed to read queue file {}: {}".format(path, exc))
             return None
 
     def _job_exists(self, task_id: str) -> bool:
@@ -524,7 +524,7 @@ class LocalFileQueue:
             except FileNotFoundError:
                 continue
             except OSError as exc:
-                print("[LocalQueue] 领取任务失败 {}: {}".format(pending_path, exc))
+                print("[LocalQueue] Failed to claim task {}: {}".format(pending_path, exc))
                 continue
 
             payload = self._read_payload(running_path)
@@ -605,8 +605,8 @@ class LocalFileQueue:
             task = store.get(str(payload.get("task_id", "")))
             if task and task.status in UNFINISHED_STATUSES:
                 task.status = "queued"
-                task.message = "Worker超时，任务已重新入队"
-                task.add_log("warning", "Worker超时，任务已重新入队")
+                task.message = "Worker timeout, task requeued"
+                task.add_log("warning", "Worker timeout, task requeued")
                 store.save(task)
 
             self.requeue(running_path, payload, "worker timeout")
@@ -619,12 +619,12 @@ class LocalFileQueue:
             if self._job_exists(task.id):
                 continue
             task.status = "queued"
-            task.message = "Worker启动时恢复任务"
-            task.add_log("info", "Worker启动时重新入队")
+            task.message = "Task recovered on worker start"
+            task.add_log("info", "Requeued on worker start")
             store.save(task)
             self.enqueue(task)
             restored += 1
-            print("[Recovery] 已恢复任务: {}".format(task.id))
+            print("[Recovery] Restored task: {}".format(task.id))
         return restored
 
     def stats(self) -> dict:
@@ -646,12 +646,12 @@ class LocalFileQueue:
 
 def _get_status_message(stage: str) -> str:
     messages = {
-        "info": "获取视频信息...",
-        "downloading": "正在下载视频...",
-        "download": "正在下载视频...",
-        "convert": "正在转换为MP3...",
-        "complete": "处理完成",
-        "completed": "处理完成",
+        "info": "Fetching video info...",
+        "downloading": "Downloading video...",
+        "download": "Downloading video...",
+        "convert": "Converting to MP3...",
+        "complete": "Processing complete",
+        "completed": "Processing complete",
     }
     return messages.get(stage, stage)
 
@@ -663,7 +663,7 @@ def process_download_task(
     trim_end_seconds: int = 3,
     repeat_count: int = 2,
 ):
-    print("[LocalWorker] 开始处理任务: {}".format(task_id))
+    print("[LocalWorker] Processing task: {}".format(task_id))
     store = TaskStore()
     downloader = VideoDownloader(str(store.data_dir))
 
@@ -694,8 +694,8 @@ def process_download_task(
 
     try:
         task.status = "downloading"
-        task.message = "正在下载视频..."
-        task.add_log("info", "开始下载视频")
+        task.message = "Downloading video..."
+        task.add_log("info", "Start downloading video")
         store.save(task)
 
         last_update_percent = 0
@@ -734,12 +734,12 @@ def process_download_task(
         task.result = result
         task.status = "completed"
         task.progress = 100
-        task.message = "处理完成"
+        task.message = "Processing complete"
         task.completed_at = time.time()
-        task.add_log("success", "处理完成")
+        task.add_log("success", "Processing complete")
         store.save(task)
 
-        print("[LocalWorker] 任务完成: {}".format(task_id))
+        print("[LocalWorker] Task complete: {}".format(task_id))
         return result
 
     except Exception as exc:
@@ -751,12 +751,12 @@ def process_download_task(
 
         task.status = "failed"
         task.error = str(exc)
-        task.message = "处理失败: {}".format(exc)
+        task.message = "Processing failed: {}".format(exc)
         task.completed_at = time.time()
         task.add_log("error", str(exc))
         store.save(task)
 
-        print("[LocalWorker] 任务失败: {}, 错误: {}".format(task_id, exc))
+        print("[LocalWorker] Task failed: {}, error: {}".format(task_id, exc))
         raise
 
 
@@ -779,7 +779,7 @@ class LocalQueueWorker:
     def recover(self) -> int:
         restored = self.queue.recover_stale_running(self.store)
         restored += self.queue.requeue_unfinished(self.store)
-        print("[Recovery] 恢复完成，重新入队 {} 个任务".format(restored))
+        print("[Recovery] Recovery complete, requeued {} tasks".format(restored))
         return restored
 
     def process_once(self) -> bool:
@@ -811,14 +811,14 @@ class LocalQueueWorker:
                 task = self.store.get(task_id)
                 if task:
                     task.status = "queued"
-                    task.message = "处理失败，等待第 {} 次尝试".format(attempts + 1)
-                    task.add_log("warning", "任务失败后重新入队: {}".format(exc))
+                    task.message = "Failed, waiting for attempt {}".format(attempts + 1)
+                    task.add_log("warning", "Task requeued after failure: {}".format(exc))
                     self.store.save(task)
                 self.queue.requeue(running_path, payload, str(exc))
-                print("[LocalWorker] 任务重新入队: {}, attempts={}".format(task_id, attempts))
+                print("[LocalWorker] Task requeued: {}, attempts={}".format(task_id, attempts))
             else:
                 self.queue.fail_final(running_path, payload, str(exc))
-                print("[LocalWorker] 任务达到最大重试次数: {}".format(task_id))
+                print("[LocalWorker] Task max retries reached: {}".format(task_id))
             return True
 
     def run_forever(self):
@@ -839,7 +839,7 @@ class TaskProcessor:
         self.store = TaskStore(download_dir=self.download_dir)
         self.queue = LocalFileQueue(self.download_dir)
         self._downloader = None
-        print("[TaskProcessor] 本地目录队列: {}".format(self.queue.queue_dir))
+        print("[TaskProcessor] Local directory queue: {}".format(self.queue.queue_dir))
 
     @property
     def downloader(self):
@@ -878,14 +878,14 @@ class TaskProcessor:
                 trim_end_seconds=trim_end_seconds,
                 repeat_count=repeat_count,
                 status="queued",
-                message="等待处理...",
+                message="Waiting...",
                 dedupe_key=dedupe_key,
             )
-            task.add_log("info", "任务已创建，加入本地队列")
+            task.add_log("info", "Task created, added to local queue")
             self.store.save(task)
             self.queue.enqueue(task)
 
-        print("[任务] 提交成功: {}, local queue".format(task_id))
+        print("[Task] Submitted: {}, local queue".format(task_id))
         return task_id
 
     def get_task(self, task_id: str) -> Optional[Task]:
@@ -896,9 +896,9 @@ class TaskProcessor:
 
     def cleanup_old_files(self, max_age_hours: Optional[int] = None) -> int:
         max_age_hours = get_retention_hours() if max_age_hours is None else max_age_hours
-        print("[清理] 开始清理，保留时间: {} 小时".format(max_age_hours))
+        print("[Cleanup] Starting cleanup, retention: {} hours".format(max_age_hours))
         count = self.store.cleanup_old(max_age_hours=max_age_hours, delete_mp3=True)
-        print("[清理] 完成，共清理 {} 个文件".format(count))
+        print("[Cleanup] Complete, {} files cleaned".format(count))
         return count
 
     def get_queue_stats(self) -> dict:
@@ -916,7 +916,7 @@ def recover_unfinished_tasks(queue=None, redis_conn=None) -> int:
     local_queue = LocalFileQueue(store.data_dir)
     restored = local_queue.recover_stale_running(store)
     restored += local_queue.requeue_unfinished(store)
-    print("[Recovery] 恢复完成，重新入队 {} 个任务".format(restored))
+    print("[Recovery] Recovery complete, requeued {} tasks".format(restored))
     return restored
 
 

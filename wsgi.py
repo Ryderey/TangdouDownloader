@@ -20,8 +20,8 @@ def main():
     port = int(os.environ.get("TANGDOU_PORT", 18080))
     threads = int(os.environ.get("TANGDOU_THREADS", 4))
 
-    print("[waitress] 启动服务: http://{}:{}".format(host, port))
-    print("[waitress] 工作线程数: {}".format(threads))
+    print("[waitress] Starting server: http://{}:{}".format(host, port))
+    print("[waitress] Worker threads: {}".format(threads))
     serve(app, host=host, port=port, threads=threads)
 
 

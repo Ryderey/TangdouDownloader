@@ -114,7 +114,7 @@ def test_with_requests():
     """使用requests库测试（如果已安装）"""
     try:
         import requests
-        print_info("使用 requests 库测试...")
+        print_info("Testing with requests library...")
         
         session = requests.Session()
         session.headers.update({
@@ -128,7 +128,7 @@ def test_with_requests():
             'headers': dict(response.headers)
         }
     except ImportError:
-        return {'success': False, 'error': 'requests库未安装'}
+        return {'success': False, 'error': 'requests library not installed'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
@@ -144,86 +144,86 @@ def check_tailscale():
         return None
 
 def main():
-    print_header("糖豆MP3提取器 - 网络诊断工具")
+    print_header("Tangdou MP3 Extractor - Network Diagnostics")
     
     # 1. 测试各种DNS服务器
-    print_header("[1] DNS解析测试")
+    print_header("[1] DNS Resolution Test")
     
     for dns_name, dns_ip in TEST_DNS_SERVERS:
-        print_info(f"测试 {dns_name}: {dns_ip or '系统默认'}")
+        print_info("Testing {}: {}".format(dns_name, dns_ip or 'system default'))
         
         try:
             result = test_dns_resolution(dns_ip)
             if isinstance(result, list) and result:
-                print_success(f"解析成功: {', '.join(result)}")
+                print_success("Resolved: {}".format(', '.join(result)))
             elif isinstance(result, str) and result.startswith("ERROR"):
-                print_error(f"解析失败: {result}")
+                print_error("Resolution failed: {}".format(result))
             else:
-                print_error(f"解析失败: 未知错误")
+                print_error("Resolution failed: unknown error")
         except Exception as e:
-            print_error(f"解析失败: {e}")
+            print_error("Resolution failed: {}".format(e))
     
     # 2. 尝试解析IP后进行TCP连接测试
-    print_header("[2] TCP连接测试")
+    print_header("[2] TCP Connection Test")
     
     try:
         ips = test_dns_resolution("223.5.5.5")
         if isinstance(ips, list) and ips:
             for ip in ips[:2]:  # 只测试前2个IP
-                print_info(f"测试TCP连接到 {ip}:443")
+                print_info("Testing TCP connection to {}:443".format(ip))
                 if test_tcp_connection(ip):
-                    print_success(f"TCP连接成功")
+                    print_success("TCP connection successful")
                 else:
-                    print_error(f"TCP连接失败")
+                    print_error("TCP connection failed")
         else:
-            print_warning("无法获取IP进行TCP测试")
+            print_warning("Cannot get IP for TCP test")
     except Exception as e:
-        print_error(f"TCP测试失败: {e}")
+        print_error("TCP test failed: {}".format(e))
     
     # 3. HTTPS请求测试
-    print_header("[3] HTTPS请求测试")
+    print_header("[3] HTTPS Request Test")
     
-    print_info("使用 urllib 测试...")
+    print_info("Testing with urllib...")
     result = test_https_request(TARGET_URL)
     if result['success']:
-        print_success(f"HTTPS请求成功，状态码: {result['status']}")
+        print_success("HTTPS request OK, status: {}".format(result['status']))
     else:
-        print_error(f"HTTPS请求失败: {result['error']}")
+        print_error("HTTPS request failed: {}".format(result['error']))
     
     # 尝试使用requests
-    print_info("尝试使用 requests 库...")
+    print_info("Trying with requests library...")
     result = test_with_requests()
     if result['success']:
-        print_success(f"requests请求成功，状态码: {result['status']}")
+        print_success("requests OK, status: {}".format(result['status']))
     else:
-        if 'requests库未安装' in result['error']:
+        if 'requests library not installed' in result['error']:
             print_warning(result['error'])
         else:
-            print_error(f"requests请求失败: {result['error']}")
+            print_error("requests failed: {}".format(result['error']))
     
     # 4. 检查Tailscale
-    print_header("[4] Tailscale状态")
+    print_header("[4] Tailscale Status")
     tailscale_status = check_tailscale()
     if tailscale_status:
-        print_info("Tailscale已连接:")
+        print_info("Tailscale connected:")
         print(tailscale_status[:500])
     else:
-        print_warning("Tailscale未运行或未安装")
+        print_warning("Tailscale not running or not installed")
     
     # 5. 系统DNS配置
-    print_header("[5] 系统DNS配置")
+    print_header("[5] System DNS Config")
     try:
         with open('/etc/resolv.conf', 'r') as f:
             content = f.read()
-            print_info("/etc/resolv.conf 内容:")
+            print_info("/etc/resolv.conf content:")
             for line in content.strip().split('\n')[:10]:
                 if line.strip() and not line.startswith('#'):
                     print(f"  {line}")
     except Exception as e:
-        print_error(f"无法读取DNS配置: {e}")
+        print_error("Cannot read DNS config: {}".format(e))
     
     # 6. 修复建议
-    print_header("修复建议")
+    print_header("Fix Suggestions")
     print("""
 如果DNS解析失败，尝试以下方法：
 

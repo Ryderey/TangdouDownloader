@@ -110,7 +110,7 @@ class TaskProcessor:
         self.task_queue = queue.Queue()
         self._worker_thread = threading.Thread(target=self._worker, daemon=True)
         self._worker_thread.start()
-        print("[TaskProcessor] 内存模式（仅开发使用）")
+        print("[TaskProcessor] Memory mode (dev only)")
     
     def _worker(self):
         """工作线程"""
@@ -124,15 +124,15 @@ class TaskProcessor:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"[Worker] 错误: {e}")
+                print("[Worker] Error: {}".format(e))
     
     def _process_task(self, task: Task):
         """处理任务"""
         video_path = None
         try:
             task.status = "downloading"
-            task.message = "正在下载视频..."
-            task.add_log('info', '开始下载视频')
+            task.message = "Downloading video..."
+            task.add_log('info', 'Start downloading video')
             self.store.save(task)
             
             def progress_callback(stage, percent):
@@ -160,9 +160,9 @@ class TaskProcessor:
             task.result = result
             task.status = "completed"
             task.progress = 100
-            task.message = "处理完成"
+            task.message = "Processing complete"
             task.completed_at = time.time()
-            task.add_log('success', '处理完成')
+            task.add_log('success', 'Processing complete')
             
         except Exception as e:
             if video_path:
@@ -173,7 +173,7 @@ class TaskProcessor:
             
             task.status = "failed"
             task.error = str(e)
-            task.message = f"处理失败: {e}"
+            task.message = "Processing failed: {}".format(e)
             task.completed_at = time.time()
             task.add_log('error', str(e))
         
@@ -187,9 +187,9 @@ class TaskProcessor:
             url=url,
             skip_seconds=skip_seconds,
             status="queued",
-            message="等待处理..."
+            message="Waiting..."
         )
-        task.add_log('info', '任务已创建')
+        task.add_log('info', 'Task created')
         self.store.save(task)
         self.task_queue.put(task)
         return task_id
